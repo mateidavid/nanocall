@@ -7,7 +7,7 @@ CXXFLAGS = -Wall -Wextra -pedantic -g3 -ggdb -fno-eliminate-unused-debug-types $
 M_CXXFLAGS = -std=c++11
 CPPFLAGS = -isystem ${HDF_ROOT}/include -I fast5/src -I tclap/include
 
-TARGETS = compute-state-transitions compute-scaled-pore-model run-fwbw
+TARGETS = compute-state-transitions compute-scaled-pore-model run-fwbw run-viterbi
 
 .PHONY: all test clean
 
@@ -23,4 +23,7 @@ compute-scaled-pore-model: compute-scaled-pore-model.cpp
 	${CXX} ${M_CXXFLAGS} ${CXXFLAGS} ${CPPFLAGS} $^ -o $@ ${LDFLAGS} -L ${HDF_ROOT}/lib -lhdf5
 
 run-fwbw: run-fwbw.cpp logsum.cpp
+	${CXX} ${M_CXXFLAGS} ${CXXFLAGS} ${CPPFLAGS} $^ -o $@ ${LDFLAGS} -lz
+
+run-viterbi: run-viterbi.cpp logsum.cpp
 	${CXX} ${M_CXXFLAGS} ${CXXFLAGS} ${CPPFLAGS} $^ -o $@ ${LDFLAGS} -lz

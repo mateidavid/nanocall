@@ -42,6 +42,24 @@ public:
         }
         return res;
     }
+    static unsigned min_skip(unsigned k1, unsigned k2)
+    {
+        if (k1 == k2)
+        {
+            return 0;
+        }
+        else
+        {
+            for (unsigned k = Kmer_Size - 1; k > 0; --k)
+            {
+                if ((k1 & ((1u << (2 * k)) - 1)) == (k2 >> (2 * (Kmer_Size - k))))
+                {
+                    return Kmer_Size - k;
+                }
+            }
+            return Kmer_Size;
+        }
+    }
 }; // class Kmer
 
 #endif

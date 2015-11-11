@@ -101,10 +101,10 @@ public:
                     p += p_stay;
                 }
                 for (unsigned k = 1; k < Kmer_Size; ++k)
-                    if ((i & ((1lu << (2 * k)) - 1)) == (j >> (2 * (Kmer_Size - k))))
+                    if ((i & ((1u << (2 * k)) - 1)) == (j >> (2 * (Kmer_Size - k))))
                     {
                         p += (1 - p_stay) * (1 - p_skip) * pow(p_skip, Kmer_Size - k - 1)
-                            / (1lu << (2 * (Kmer_Size - k)));
+                            / (1u << (2 * (Kmer_Size - k)));
                     }
                 p += (1 - p_stay) * pow(p_skip, 4) / n_states;
                 if (p > p_cutoff)
