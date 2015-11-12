@@ -22,18 +22,18 @@ template < typename Float_Type >
 inline Float_Type log_normal_pdf(Float_Type x, Float_Type mean, Float_Type stdv, Float_Type log_stdv)
 {
     // From SO: http://stackoverflow.com/questions/10847007/using-the-gaussian-probability-density-function-in-c
-    static const Float_Type log_2pi = std::log(2 * M_PI);
+    static const Float_Type log_2pi = std::log(2.0 * M_PI);
     Float_Type a = (x - mean) / stdv;
-    return - log_stdv - (log_2pi + a * a) / 2;
+    return - log_stdv - (log_2pi + a * a) / static_cast< Float_Type >(2.0);
 }
 
 template < typename Float_Type >
 inline Float_Type log_invgauss_pdf(Float_Type x, Float_Type log_x,
                                    Float_Type mu, Float_Type lambda, Float_Type log_lambda)
 {
-    static const Float_Type log_2pi = std::log(2 * M_PI);
+    static const Float_Type log_2pi = std::log(2.0 * M_PI);
     Float_Type a = (x - mu) / mu;
-    return (log_lambda - log_2pi - 3 * log_x - lambda * a * a / x) / 2;
+    return (log_lambda - log_2pi - static_cast< Float_Type >(3.0) * log_x - lambda * a * a / x) / static_cast< Float_Type >(2.0);
 }
 
 template < typename Float_Type = float >
