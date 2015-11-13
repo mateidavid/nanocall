@@ -39,6 +39,8 @@ inline Float_Type log_invgauss_pdf(Float_Type x, Float_Type log_x,
 template < typename Float_Type = float >
 struct Pore_Model_Parameters
 {
+    Pore_Model_Parameters() : scale(1.0), shift(0.0), drift(0.0), var(1.0), scale_sd(1.0), var_sd(1.0) {}
+
     Float_Type scale;
     Float_Type shift;
     Float_Type drift;

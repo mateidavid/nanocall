@@ -7,7 +7,7 @@ CXXFLAGS = -Wall -Wextra -pedantic -g3 -ggdb -fno-eliminate-unused-debug-types $
 M_CXXFLAGS = -std=c++11
 CPPFLAGS = -isystem ${HDF_ROOT}/include -I fast5/src -I tclap/include
 
-TARGETS = compute-state-transitions compute-scaled-pore-model run-fwbw run-viterbi
+TARGETS = compute-state-transitions compute-scaled-pore-model run-fwbw run-viterbi nanocall
 
 .PHONY: all test clean
 
@@ -27,3 +27,6 @@ run-fwbw: run-fwbw.cpp logsum.cpp
 
 run-viterbi: run-viterbi.cpp logsum.cpp
 	${CXX} ${M_CXXFLAGS} ${CXXFLAGS} ${CPPFLAGS} $^ -o $@ ${LDFLAGS} -lz
+
+nanocall: nanocall.cpp logsum.cpp Builtin_Modules.cpp
+	${CXX} ${M_CXXFLAGS} ${CXXFLAGS} ${CPPFLAGS} $^ -o $@ ${LDFLAGS} -L ${HDF_ROOT}/lib -lhdf5 -lz
