@@ -28,5 +28,5 @@ run-fwbw: run-fwbw.cpp logsum.cpp
 run-viterbi: run-viterbi.cpp logsum.cpp
 	${CXX} ${M_CXXFLAGS} ${CXXFLAGS} ${CPPFLAGS} $^ -o $@ ${LDFLAGS} -lz
 
-nanocall: nanocall.cpp logsum.cpp Builtin_Modules.cpp
+nanocall: nanocall.cpp logsum.cpp Builtin_Model.cpp
 	${CXX} ${M_CXXFLAGS} ${CXXFLAGS} ${CPPFLAGS} $^ -o $@ ${LDFLAGS} -L ${HDF_ROOT}/lib -lhdf5 -lz

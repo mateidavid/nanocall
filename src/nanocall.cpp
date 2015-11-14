@@ -4,7 +4,7 @@
 #include <tclap/CmdLine.h>
 
 #include "Pore_Model.hpp"
-#include "Builtin_Modules.hpp"
+#include "Builtin_Model.hpp"
 #include "State_Transitions.hpp"
 #include "Event.hpp"
 #include "Fast5_Summary.hpp"
@@ -23,7 +23,7 @@ typedef Event<> Event_Type;
 typedef Event_Sequence<> Event_Sequence_Type;
 typedef Fast5_Summary<> Fast5_Summary_Type;
 
-typedef map< unsigned, vector< pair< string, Pore_Model_Type > > > Model_Dict_Type;
+typedef map< string, Pore_Model_Type > Model_Dict_Type;
 
 namespace opts
 {
@@ -87,24 +87,23 @@ void init_models(Model_Dict_Type& models)
                 string pm_name = e;
                 strict_fstream::ifstream ifs(e);
                 ifs >> pm;
-                models[st].emplace_back(make_pair(move(pm_name), move(pm)));
-                LOG("main", info) << "loaded module [" << e << "] for strand [" << st << "]" << endl;
+                pm.strand() = st;
+                models[pm_name] = move(pm);
+                LOG("main", info) << "loaded module [" << pm_name << "] for strand [" << st << "]" << endl;
             }
         }
     }
     else
     {
-        // use built-in modules
-        for (unsigned i = 0; i < Builtin_Module::num; ++i)
+        // use built-in models
+        for (unsigned i = 0; i < Builtin_Model::num; ++i)
         {
             Pore_Model_Type pm;
-            string pm_name = Builtin_Module::names[i];
-            string tmp(reinterpret_cast< const char* >(Builtin_Module::raw_strings[i]),
-                       Builtin_Module::raw_string_lens[i]);
-            istringstream ifs(tmp);
-            ifs >> pm;
-            models[Builtin_Module::strands[i]].emplace_back(make_pair(move(pm_name), move(pm)));
-            LOG("main", info) << "loaded builtin module [" << Builtin_Module::names[i] << "] for strand [" << Builtin_Module::strands[i] << "]" << endl;
+            string pm_name = Builtin_Model::names[i];
+            pm.load_from_vector(Builtin_Model::init_lists[i]);
+            pm.strand() = Builtin_Model::strands[i];
+            models[Builtin_Model::names[i]] = move(pm);
+            LOG("main", info) << "loaded builtin module [" << Builtin_Model::names[i] << "] for strand [" << Builtin_Model::strands[i] << "]" << endl;
         }
     }
 }

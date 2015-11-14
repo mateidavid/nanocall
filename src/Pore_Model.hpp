@@ -69,10 +69,10 @@ struct Pore_Model_State
 
     Float_Type level_mean;
     Float_Type level_stdv;
-    Float_Type log_level_stdv;
     Float_Type sd_mean;
     Float_Type sd_stdv;
     Float_Type sd_lambda;
+    Float_Type log_level_stdv;
     Float_Type log_sd_stdv;
     Float_Type log_sd_lambda;
 
@@ -129,11 +129,14 @@ public:
     typedef Pore_Model_Parameters< Float_Type > Pore_Model_Parameters_Type;
     static const unsigned n_states = 1u << (2 * Kmer_Size);
 
-    Pore_Model() : _state(n_states) {}
+    Pore_Model() : _state(n_states), _strand(2) {}
     void clear() { _state.clear(); _state.resize(n_states); }
 
     const Pore_Model_State_Type& state(unsigned i) const { return _state.at(i); }
     Pore_Model_State_Type& state(unsigned i) { return _state.at(i); }
+
+    const unsigned& strand() const { return _strand; }
+    unsigned& strand() { return _strand; }
 
     void scale(const Pore_Model_Parameters_Type& params)
     {
@@ -155,6 +158,21 @@ public:
         }
     }
 
+    // load from vector
+    void load_from_vector(const std::vector< float >& v)
+    {
+        assert(v.size() == n_states * 4);
+        for (unsigned i = 0; i < n_states; ++i)
+        {
+            state(i).level_mean = v[4 * i + 0];
+            state(i).level_stdv = v[4 * i + i];
+            state(i).sd_mean = v[4 * i + 2];
+            state(i).sd_stdv = v[4 * i + 3];
+            state(i).update_sd_lambda();
+            state(i).update_logs();
+        }
+    }
+    
     // write model to out stream
     friend std::ostream& operator << (std::ostream& os, const Pore_Model& pm)
     {
@@ -195,6 +213,7 @@ public:
 
 private:
     std::vector< Pore_Model_State_Type > _state;
+    unsigned _strand;
 }; // class Pore_Model
 
 #endif
