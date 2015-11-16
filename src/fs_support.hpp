@@ -7,6 +7,10 @@
 #include <sys/types.h>
 #include <dirent.h>
 
+// This should work in windows.
+// Ref:
+// http://stackoverflow.com/a/612176/717706
+
 bool is_directory(const std::string& file_name)
 {
     auto dir = opendir(file_name.c_str());
