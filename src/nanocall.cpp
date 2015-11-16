@@ -105,7 +105,7 @@ void init_models(Pore_Model_Dict_Type& models)
                 << pm.stdv() << "]" << endl;
         }
     }
-}
+} // init_models
 
 void init_transitions(State_Transitions_Type& transitions)
 {
@@ -120,7 +120,7 @@ void init_transitions(State_Transitions_Type& transitions)
         LOG("main", info) << "initialized state transitions with parameters p_skip=[" << opts::pr_skip
                           << "], pr_stay=[" << opts::pr_stay << "], pr_cutoff=[" << opts::pr_cutoff << "]" << endl;
     }
-}
+} // init_transitions
 
 // Parse command line arguments. For each of them:
 // - if it is a directory, find all fast5 files in it, ignore non-fast5 files.
@@ -160,7 +160,7 @@ void init_files(list< string >& files)
             }
         }
     }
-}
+} // init_files
 
 void init_reads(const Pore_Model_Dict_Type& models,
                 const list< string >& files,
@@ -175,7 +175,96 @@ void init_reads(const Pore_Model_Dict_Type& models,
             reads.emplace_back(move(s));
         }
     }
-}
+} // init_reads
+
+void train_reads(const Pore_Model_Dict_Type& models,
+                 State_Transitions_Type& transitions,
+                 deque< Fast5_Summary_Type >& reads)
+{
+    return;
+    //
+    // this is only a stub
+    //
+    for (unsigned round = 0; round < 5; ++round)
+    {
+        LOG("main", info) << "starting training round [" << round << "]" << endl;
+        unsigned crt_idx = 0;
+        pfor::pfor< unsigned >(
+            opts::num_threads,
+            10,
+            // get_item
+            [&] (unsigned& i) {
+                if (crt_idx >= reads.size()) return false;
+                i = crt_idx++;
+                return true;
+            },
+            // process item
+            [&] (unsigned& i) {
+                Fast5_Summary_Type& read_summary = reads[i];
+                read_summary.load_events();
+
+                for (unsigned st = 0; st < 2; ++st)
+                {
+                    // if not enough events, ignore strand
+                    if (read_summary.events[st].size() < 100) continue;
+                    // create list of models to try
+                    list< string > model_sublist;
+                    if (models.count(read_summary.preferred_model[st]))
+                    {
+                        // if we have a preferred model, use that
+                        model_sublist.push_back(read_summary.preferred_model[st]);
+                    }
+                    else
+                    {
+                        // no preferred model, try all that apply to this strand
+                        for (const auto& p : models)
+                        {
+                            if (p.second.strand() == st or p.second.strand() == 2)
+                            {
+                                model_sublist.push_back(p.first);
+                            }
+                        }
+                    }
+                    assert(not model_sublist.empty());
+                    // initialize parameters if not existing already
+                    for (const auto& m_name : model_sublist)
+                    {
+                        if (not read_summary.params[st].count(m_name))
+                        {
+                            read_summary.params[st][m_name] = Pore_Model_Parameters_Type();
+                        }
+                    }
+                    // run fwbw
+                    map< string, Forward_Backward_Type > results;
+                    for (const auto& m_name : model_sublist)
+                    {
+                        // scale model using current parameters
+                        Pore_Model_Type pm(models.at(m_name));
+                        Pore_Model_Parameters_Type pm_params = read_summary.params[st].at(m_name);
+                        pm.scale(pm_params);
+                        // main work: fill matrix
+                        results[m_name].fill(pm, transitions, read_summary.events[st]);
+                    }
+                    //
+                    // use fwbw results to update parameters
+                    // ...
+                    //
+                }
+                read_summary.drop_events();
+            },
+            // progress_report
+            [&] (unsigned items, unsigned seconds) {
+                clog << "Processed " << setw(6) << right << items << " reads in "
+                     << setw(6) << right << seconds << " seconds\r";
+            }); // pfor
+
+        //
+        // update state_transitions
+        // ...
+        //
+
+    } // for round
+} // train_reads
 
 void basecall_reads(const Pore_Model_Dict_Type& models,
                     const State_Transitions_Type& transitions,
@@ -230,7 +319,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                     }
                 }
                 assert(not model_sublist.empty());
-                // initialize parameters if not existing
+                // initialize parameters if not existing already
                 for (const auto& m_name : model_sublist)
                 {
                     if (not read_summary.params[st].count(m_name))
@@ -258,6 +347,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                 oss << ">" << read_summary.read_id << ":" << st << endl
                     << base_seq << endl;
             } // for st
+            read_summary.drop_events();
         },
         // output_chunk
         [&] (std::ostringstream& oss) {
@@ -267,8 +357,8 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
         [&] (unsigned items, unsigned seconds) {
             clog << "Processed " << setw(6) << right << items << " reads in "
                  << setw(6) << right << seconds << " seconds\r";
-        });
-}
+        }); // pfor
+} // basecall_reads
 
 void real_main()
 {
@@ -282,7 +372,7 @@ void real_main()
     init_files(files);
     init_reads(models, files, reads);
     // do some training
-    // ...
+    train_reads(models, transitions, reads);
     // basecall reads
     basecall_reads(models, transitions, reads);
 }

@@ -95,11 +95,11 @@ public:
             fast5::File f(file_name);
             load_ed_events(f);
         }
-        for (unsigned i = 0; i < 2; ++i)
+        for (unsigned st = 0; st < 2; ++st)
         {
-            events[i].clear();
-            if (strand_bounds[2 * i + 0] == 0) continue;
-            for (unsigned j = strand_bounds[2 * i + 0]; j < strand_bounds[2 * i + 1]; ++j)
+            events[st].clear();
+            if (strand_bounds[2 * st + 0] == 0) continue;
+            for (unsigned j = strand_bounds[2 * st + 0]; j < strand_bounds[2 * st + 1]; ++j)
             {
                 if (filter_ed_event(ed_events[j], abasic_level))
                 {
@@ -109,11 +109,18 @@ public:
                     e.start = 0.0;
                     e.length = 0.0;
                     e.update_logs();
-                    events[i].push_back(e);
+                    events[st].push_back(e);
                 }
             }
         }
         ed_events.clear();
+    }
+    void drop_events()
+    {
+        for (unsigned st = 0; st < 2; ++st)
+        {
+            events[st].clear();
+        }
     }
 
     friend std::ostream& operator << (std::ostream& os, const Fast5_Summary& fs)
