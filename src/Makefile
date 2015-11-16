@@ -30,3 +30,6 @@ run-viterbi: run-viterbi.cpp logsum.cpp
 
 nanocall: nanocall.cpp logsum.cpp Builtin_Model.cpp
 	${CXX} ${M_CXXFLAGS} ${CXXFLAGS} ${CPPFLAGS} $^ -o $@ ${LDFLAGS} -L ${HDF_ROOT}/lib -lhdf5 -lz
+
+list-directory: list-directory.cpp
+	${CXX} ${M_CXXFLAGS} ${CXXFLAGS} ${CPPFLAGS} $^ -o $@ ${LDFLAGS}

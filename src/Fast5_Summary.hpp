@@ -20,7 +20,7 @@ public:
     std::string file_name;
     std::string read_id;
     std::array< Pore_Model_Type*, 2 > model_p;
-    std::array< Pore_Model_Parameters_Type, 2 > params;
+    std::map< std::string, Pore_Model_Parameters_Type > params;
     std::array< unsigned, 4 > strand_bounds;
     float abasic_level;
     bool have_ed_events;
@@ -40,16 +40,23 @@ public:
         file_name = fn;
         fast5::File f(file_name);
         have_ed_events = f.have_eventdetection_events();
-        if (not have_ed_events) return;
-        load_ed_events(f);
-        auto ed_params = f.get_eventdetection_event_parameters();
-        read_id = ed_params.read_id;
-        abasic_level = detect_abasic_level(ed_events);
-        if (abasic_level > 1.0)
+        if (have_ed_events)
         {
-            strand_bounds = detect_strands(ed_events, abasic_level);
+            load_ed_events(f);
+            auto ed_params = f.get_eventdetection_event_parameters();
+            read_id = ed_params.read_id;
+            if (read_id.empty())
+            {
+                auto pos = file_name.find_last_of('/');
+                read_id = file_name.substr(pos != std::string::npos? pos + 1 : 0);
+            }
+            abasic_level = detect_abasic_level(ed_events);
+            if (abasic_level > 1.0)
+            {
+                strand_bounds = detect_strands(ed_events, abasic_level);
+            }
+            ed_events.clear();
         }
-        ed_events.clear();
     }
 
     void load_events()
@@ -107,6 +114,27 @@ private:
 
     // crude detection of abasic level
     static Float_Type detect_abasic_level(const std::vector< fast5::EventDetection_Event_Entry >& ev)
+    {
+        if (ev.size() < 100)
+        {
+            return 0.0;
+        }
+        //
+        // use 1.0 pA + max level excluding to 5%
+        //
+        std::vector< Float_Type > s;
+        s.resize(ev.size());
+        unsigned i;
+        for (i = 0; i < ev.size(); ++i)
+        {
+            s[i] = ev[i].mean;
+        }
+        std::sort(s.begin(), s.end());
+        return s[99 * s.size() / 100] + 5.0f;
+    }
+
+    // crude detection of abasic level
+    static Float_Type detect_abasic_level_2(const std::vector< fast5::EventDetection_Event_Entry >& ev)
     {
         if (ev.size() < 100)
         {

@@ -13,6 +13,7 @@
 #include "logger.hpp"
 #include "zstr.hpp"
 #include "fast5.hpp"
+#include "fs_support.hpp"
 
 using namespace std;
 
@@ -66,7 +67,7 @@ void init_models(Model_Dict_Type& models)
     }
     if (not opts::model_fofn.get().empty())
     {
-        strict_fstream::ifstream ifs(opts::model_fofn);
+        zstr::ifstream ifs(opts::model_fofn);
         string s;
         while (getline(ifs, s))
         {
@@ -88,8 +89,7 @@ void init_models(Model_Dict_Type& models)
             {
                 Pore_Model_Type pm;
                 string pm_name = e;
-                strict_fstream::ifstream ifs(e);
-                ifs >> pm;
+                zstr::ifstream(e) >> pm;
                 pm.strand() = st;
                 models[pm_name] = move(pm);
                 LOG("main", info) << "loaded module [" << pm_name << "] for strand [" << st << "]" << endl;
@@ -126,11 +126,61 @@ void init_transitions(State_Transitions_Type& transitions)
     }
 }
 
+// Parse command line arguments. For each of them:
+// - if it is a directory, find all fast5 files in it, ignore non-fast5 files.
+// - if it is a file, check that it is indeed a fast5 file.
 void init_files(list< string >& files)
-{}
+{
+    for (const auto& f : opts::input_fn)
+    {
+        if (is_directory(f))
+        {
+            auto l = list_directory(f);
+            for (const auto& g : l)
+            {
+                string f2 = f + (f[f.size() - 1] != '/'? "/" : "") + g;
+                if (fast5::File::is_valid_file(f2))
+                {
+                    files.push_back(f2);
+                    LOG("main", info) << "adding input file [" << f2 << "]" << endl;
+                }
+                else
+                {
+                    LOG("main", info) << "ignoring file [" << f2 << "]" << endl;
+                }
+            }
+        }
+        else // not a directory
+        {
+            if (fast5::File::is_valid_file(f))
+            {
+                files.push_back(f);
+                LOG("main", info) << "adding input file [" << f << "]" << endl;
+            }
+            else
+            {
+                cerr << "error opening fast5 file [" << f << "]" << endl;
+                exit(EXIT_FAILURE);
+            }
+        }
+    }
+}
 
-void init_reads(list< string >& files, deque< Fast5_Summary_Type >& reads)
-{}
+void init_reads(const list< string >& files, deque< Fast5_Summary_Type >& reads)
+{
+    for (const auto& f : files)
+    {
+        Fast5_Summary_Type s(f);
+        LOG("main", info) << "summary: " << s << endl;
+        reads.emplace_back(move(s));
+    }
+}
+
+void basecall_reads(const Model_Dict_Type& models,
+                    const State_Transitions_Type& transitions,
+                    deque< Fast5_Summary_Type >& reads)
+{
+}
 
 void real_main()
 {
@@ -144,31 +194,11 @@ void real_main()
     init_files(files);
     init_reads(files, reads);
 
-    clog << "files:";
-    for (auto& e : opts::input_fn)
-    {
-        clog << " " << e;
-    }
-    clog << endl;
+    // do some training
 
-    Fast5_Summary_Type fs(opts::input_fn.get().at(0));
-    cerr << fs << endl;
+    basecall_reads(models, transitions, reads);
 
     /*
-    Pore_Model<> pm;
-    State_Transitions<> st;
-    vector< Event<> > ev;
-    zstr::ifstream(opts::pm_file_name) >> pm;
-    zstr::ifstream(opts::st_file_name) >> st;
-    {
-        zstr::ifstream ifs(opts::ev_file_name);
-        Event<> e;
-        while (ifs >> e)
-        {
-            ev.push_back(e);
-        }
-    }
-
     Viterbi<> vit;
     vit.fill(pm, st, ev);
     cout << vit.base_seq() << std::endl;
@@ -178,6 +208,7 @@ void real_main()
 int main(int argc, char * argv[])
 {
     opts::cmd_parser.parse(argc, argv);
+    Logger::set_default_level(Logger::level::info);
     Logger::set_levels_from_options(opts::log_level);
     real_main();
 }
