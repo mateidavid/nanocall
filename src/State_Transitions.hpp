@@ -147,4 +147,6 @@ private:
     std::vector< State_Neighbours_Type > _neighbours;
 }; // class State_Transitions
 
+typedef State_Transitions<> State_Transitions_Type;
+
 #endif

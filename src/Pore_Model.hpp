@@ -12,11 +12,13 @@
 #include <cassert>
 #include <cmath>
 #include <iostream>
+#include <map>
 #include <string>
 
 #include "Kmer.hpp"
 #include "Event.hpp"
 #include "fast5.hpp"
+#include "mean_stdv.hpp"
 
 template < typename Float_Type >
 inline Float_Type log_normal_pdf(Float_Type x, Float_Type mean, Float_Type stdv, Float_Type log_stdv)
@@ -58,6 +60,13 @@ struct Pore_Model_Parameters
         var = m_p.var;
         scale_sd = m_p.scale_sd;
         var_sd = m_p.var_sd;
+    }
+
+    friend std::ostream& operator << (std::ostream& os, const Pore_Model_Parameters& p)
+    {
+        os << "[scale=" << p.scale << " shift=" << p.shift << " drift=" << p.drift
+           << " var=" << p.var << " scale_sd=" << p.scale_sd << " var_sd=" << p.var_sd << "]";
+        return os;
     }
 }; // struct Pore_Model_Parameters
 
@@ -137,6 +146,8 @@ public:
 
     const unsigned& strand() const { return _strand; }
     unsigned& strand() { return _strand; }
+    Float_Type mean() const { return _mean; }
+    Float_Type stdv() const { return _stdv; }
 
     void scale(const Pore_Model_Parameters_Type& params)
     {
@@ -144,6 +155,7 @@ public:
         {
             state(i).scale(params);
         }
+        update_statistics();
     }
 
     // load model from fast5 file
@@ -156,6 +168,7 @@ public:
         {
             state(i) = m.at(i);
         }
+        update_statistics();
     }
 
     // load from vector
@@ -171,8 +184,9 @@ public:
             state(i).update_sd_lambda();
             state(i).update_logs();
         }
+        update_statistics();
     }
-    
+
     // write model to out stream
     friend std::ostream& operator << (std::ostream& os, const Pore_Model& pm)
     {
@@ -201,6 +215,7 @@ public:
             pm.state(i).update_sd_lambda();
             pm.state(i).update_logs();
         }
+        pm.update_statistics();
         return is;
     }
 
@@ -213,7 +228,21 @@ public:
 
 private:
     std::vector< Pore_Model_State_Type > _state;
+    Float_Type _mean;
+    Float_Type _stdv;
     unsigned _strand;
+
+    void update_statistics()
+    {
+        assert(_state.size() == n_states);
+        std::tie(_mean, _stdv) = get_mean_stdv< Float_Type >(
+            _state,
+            [] (const Pore_Model_State_Type& s) { return s.level_mean; });
+    }
 }; // class Pore_Model
+
+typedef Pore_Model<> Pore_Model_Type;
+typedef Pore_Model_Parameters<> Pore_Model_Parameters_Type;
+typedef std::map< std::string, Pore_Model_Type > Pore_Model_Dict_Type;
 
 #endif

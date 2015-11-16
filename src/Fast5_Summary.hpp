@@ -7,6 +7,7 @@
 
 #include "Pore_Model.hpp"
 #include "fast5.hpp"
+#include "mean_stdv.hpp"
 
 template < typename Float_Type = float >
 class Fast5_Summary
@@ -19,9 +20,10 @@ public:
 
     std::string file_name;
     std::string read_id;
-    std::array< Pore_Model_Type*, 2 > model_p;
-    std::map< std::string, Pore_Model_Parameters_Type > params;
+    std::array< std::string, 2 > preferred_model;
+    std::array< std::map< std::string, Pore_Model_Parameters_Type >, 2 > params;
     std::array< unsigned, 4 > strand_bounds;
+    unsigned num_ed_events;
     float abasic_level;
     bool have_ed_events;
     bool valid;
@@ -32,18 +34,20 @@ public:
     std::array< Event_Sequence_Type, 2 > events;
 
     Fast5_Summary() : valid(false) {}
-    Fast5_Summary(const std::string fn) : valid(false) { summarize(fn); }
+    Fast5_Summary(const std::string fn, const Pore_Model_Dict_Type& models) : valid(false) { summarize(fn, models); }
 
-    void summarize(const std::string& fn)
+    void summarize(const std::string& fn, const Pore_Model_Dict_Type& models)
     {
         valid = true;
         file_name = fn;
         fast5::File f(file_name);
         have_ed_events = f.have_eventdetection_events();
+        num_ed_events = 0;
         if (have_ed_events)
         {
             load_ed_events(f);
             auto ed_params = f.get_eventdetection_event_parameters();
+            num_ed_events = ed_events.size();
             read_id = ed_params.read_id;
             if (read_id.empty())
             {
@@ -55,6 +59,30 @@ public:
             {
                 strand_bounds = detect_strands(ed_events, abasic_level);
             }
+            // compute initial model scalings
+            load_events();
+            for (unsigned st = 0; st < 2; ++st)
+            {
+                if (events[st].size() < 100)
+                {
+                    continue;
+                }
+                auto r = get_mean_stdv< Float_Type >(events[st], [] (const Event_Type& ev) { return ev.mean; });
+                for (const auto& p : models)
+                {
+                    if (p.second.strand() == st or p.second.strand() == 2)
+                    {
+                        Pore_Model_Parameters_Type param;
+                        param.shift = r.first - p.second.mean();
+                        param.scale = r.second / p.second.stdv();
+                        LOG("Fast5_Summary", debug)
+                            << "read [" << read_id << "] strand [" << st
+                            << "] model [" << p.first << "] initial parameters "
+                            << param << std::endl;
+                        params[st][p.first] = std::move(param);
+                    }
+                }
+            }
             ed_events.clear();
         }
     }
@@ -62,9 +90,12 @@ public:
     void load_events()
     {
         assert(valid and have_ed_events);
-        fast5::File f(file_name);
-        load_ed_events(f);
-        for (int i = 0; i < 2; ++i)
+        if (ed_events.empty())
+        {
+            fast5::File f(file_name);
+            load_ed_events(f);
+        }
+        for (unsigned i = 0; i < 2; ++i)
         {
             events[i].clear();
             if (strand_bounds[2 * i + 0] == 0) continue;
@@ -95,6 +126,7 @@ public:
             {
                 os << " read_id=" << fs.read_id
                    << " abasic_level=" << fs.abasic_level
+                   << " num_ed_events=" << fs.num_ed_events
                    << " strand_bounds=[" << fs.strand_bounds[0] << ","
                    << fs.strand_bounds[1] << ","
                    << fs.strand_bounds[2] << ","
@@ -167,7 +199,7 @@ private:
                    Float_Type abasic_level)
     {
         std::array< unsigned, 4 > res;
-        LOG("Event", debug) << "num_events=" << ev.size() << " abasic_level=" << abasic_level << std::endl;
+        LOG("Fast5_Summary", debug) << "num_events=" << ev.size() << " abasic_level=" << abasic_level << std::endl;
         //
         // find islands of >= 5 consecutive events at high level
         //
@@ -182,7 +214,7 @@ private:
                 if (j > i + 5)
                 {
                     islands.push_back(std::make_pair(i, j));
-                    LOG("Event", debug) << "found abasic island: [" << i << "," << j << "]" << std::endl;
+                    LOG("Fast5_Summary", debug) << "found abasic island: [" << i << "," << j << "]" << std::endl;
                 }
                 i = j + 1;
             }
@@ -198,7 +230,7 @@ private:
         {
             if (islands[i - 1].second + 50 >= islands[i].first)
             {
-                LOG("Event", debug) << "merging islands: "
+                LOG("Fast5_Summary", debug) << "merging islands: "
                           << "[" << islands[i - 1].first << "," << islands[i - 1].second << "] with "
                           << "[" << islands[i].first << "," << islands[i].second << "]" << std::endl;
                 islands[i - 1].second = islands[i].second;
@@ -211,18 +243,19 @@ private:
         {
             tmp << " [" << islands[i].first << "," << islands[i].second << "]";
         }
-        LOG("Event", debug) << "islands after merging:" << tmp.str() << std::endl;
+        LOG("Fast5_Summary", debug) << "islands after merging:" << tmp.str() << std::endl;
         //
         // pick island closest to the middle of the event sequence
         //
         auto it = min_of(
             islands,
             [&] (const std::pair< unsigned, unsigned >& p) {
-                return std::min(std::abs((long)p.first - ev.size() / 2), std::abs((long)p.second - ev.size() / 2));
+                return std::min(std::abs((long)p.first - (long)ev.size() / 2),
+                                std::abs((long)p.second - (long)ev.size() / 2));
             });
         if (islands.size() > 0)
         {
-            LOG("Event", debug) << "selected hairpin island: ["
+            LOG("Fast5_Summary", debug) << "selected hairpin island: ["
                                 << it->first << "," << it->second << "]" << std::endl;
             res[0] = 50;
             if (islands[0].first < 100)
@@ -261,5 +294,7 @@ private:
         return true;
     } // filter_ed_event()
 }; // struct Fast5_Summary
+
+typedef Fast5_Summary<> Fast5_Summary_Type;
 
 #endif

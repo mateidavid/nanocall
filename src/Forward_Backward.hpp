@@ -158,4 +158,6 @@ private:
     std::vector< Matrix_Entry > _m;
 }; // class Forward_Backward
 
+typedef Forward_Backward<> Forward_Backward_Type;
+
 #endif

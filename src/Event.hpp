@@ -42,4 +42,7 @@ public:
 template < typename Float_Type = float >
 using Event_Sequence = std::vector< Event< Float_Type > >;
 
+typedef Event<> Event_Type;
+typedef Event_Sequence<> Event_Sequence_Type;
+
 #endif

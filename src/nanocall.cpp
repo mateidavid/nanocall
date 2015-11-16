@@ -13,18 +13,10 @@
 #include "logger.hpp"
 #include "zstr.hpp"
 #include "fast5.hpp"
+#include "pfor.hpp"
 #include "fs_support.hpp"
 
 using namespace std;
-
-typedef Pore_Model<> Pore_Model_Type;
-typedef Pore_Model_Parameters<> Pore_Model_Parameters_Type;
-typedef State_Transitions<> State_Transitions_Type;
-typedef Event<> Event_Type;
-typedef Event_Sequence<> Event_Sequence_Type;
-typedef Fast5_Summary<> Fast5_Summary_Type;
-
-typedef map< string, Pore_Model_Type > Model_Dict_Type;
 
 namespace opts
 {
@@ -32,6 +24,7 @@ namespace opts
     string description = "Call bases in ONT reads";
     CmdLine cmd_parser(description);
     MultiArg< string > log_level("", "log", "Log level.", false, "string", cmd_parser);
+    ValueArg< unsigned > num_threads("t", "threads", "Number of parallel threads.", false, 1, "int", cmd_parser);
     MultiArg< string > model_fn("m", "model", "Pore model.", false, "file", cmd_parser);
     ValueArg< string > model_fofn("", "model-fofn", "File of pore models.", false, "", "file", cmd_parser);
     ValueArg< string > trans_fn("s", "trans", "Initial state transitions.", false, "", "file", cmd_parser);
@@ -42,7 +35,7 @@ namespace opts
     UnlabeledMultiArg< string > input_fn("inputs", "Input files/directories", true, "path", cmd_parser);
 } // namespace opts
 
-void init_models(Model_Dict_Type& models)
+void init_models(Pore_Model_Dict_Type& models)
 {
     auto parse_model_name = [] (const string& s) {
         if (s.size() < 3
@@ -106,7 +99,10 @@ void init_models(Model_Dict_Type& models)
             pm.load_from_vector(Builtin_Model::init_lists[i]);
             pm.strand() = Builtin_Model::strands[i];
             models[Builtin_Model::names[i]] = move(pm);
-            LOG("main", info) << "loaded builtin module [" << Builtin_Model::names[i] << "] for strand [" << Builtin_Model::strands[i] << "]" << endl;
+            LOG("main", info)
+                << "loaded builtin module [" << Builtin_Model::names[i] << "] for strand ["
+                << Builtin_Model::strands[i] << "] statistics [mean=" << pm.mean() << ", stdv="
+                << pm.stdv() << "]" << endl;
         }
     }
 }
@@ -166,43 +162,129 @@ void init_files(list< string >& files)
     }
 }
 
-void init_reads(const list< string >& files, deque< Fast5_Summary_Type >& reads)
+void init_reads(const Pore_Model_Dict_Type& models,
+                const list< string >& files,
+                deque< Fast5_Summary_Type >& reads)
 {
     for (const auto& f : files)
     {
-        Fast5_Summary_Type s(f);
+        Fast5_Summary_Type s(f, models);
         LOG("main", info) << "summary: " << s << endl;
-        reads.emplace_back(move(s));
+        if (s.have_ed_events)
+        {
+            reads.emplace_back(move(s));
+        }
     }
 }
 
-void basecall_reads(const Model_Dict_Type& models,
+void basecall_reads(const Pore_Model_Dict_Type& models,
                     const State_Transitions_Type& transitions,
                     deque< Fast5_Summary_Type >& reads)
 {
+    strict_fstream::ofstream ofs;
+    ostream* os_p = nullptr;
+    if (not opts::output_fn.get().empty())
+    {
+        ofs.open(opts::output_fn);
+        os_p = &ofs;
+    }
+    else
+    {
+        os_p = &cout;
+    }
+
+    unsigned crt_idx = 0;
+    pfor::pfor< unsigned, std::ostringstream >(
+        opts::num_threads,
+        10,
+        // get_item
+        [&] (unsigned& i) {
+            if (crt_idx >= reads.size()) return false;
+            i = crt_idx++;
+            return true;
+        },
+        // process_item
+        [&] (unsigned& i, std::ostringstream& oss) {
+            Fast5_Summary_Type& read_summary = reads[i];
+            read_summary.load_events();
+            for (unsigned st = 0; st < 2; ++st)
+            {
+                // if not enough events, ignore strand
+                if (read_summary.events[st].size() < 100) continue;
+                // create list of models to try
+                list< string > model_sublist;
+                if (models.count(read_summary.preferred_model[st]))
+                {
+                    // if we have a preferred model, use that
+                    model_sublist.push_back(read_summary.preferred_model[st]);
+                }
+                else
+                {
+                    // no preferred model, try all that apply to this strand
+                    for (const auto& p : models)
+                    {
+                        if (p.second.strand() == st or p.second.strand() == 2)
+                        {
+                            model_sublist.push_back(p.first);
+                        }
+                    }
+                }
+                assert(not model_sublist.empty());
+                // initialize parameters if not existing
+                for (const auto& m_name : model_sublist)
+                {
+                    if (not read_summary.params[st].count(m_name))
+                    {
+                        read_summary.params[st][m_name] = Pore_Model_Parameters_Type();
+                    }
+                }
+                // deque of results
+                deque< tuple< float, string, string > > results;
+                for (const auto& m_name : model_sublist)
+                {
+                    Pore_Model_Type pm(models.at(m_name));
+                    Pore_Model_Parameters_Type pm_params = read_summary.params[st].at(m_name);
+                    pm.scale(pm_params);
+                    Viterbi_Type vit;
+                    vit.fill(pm, transitions, read_summary.events.at(st));
+                    results.emplace_back(make_tuple(vit.path_probability(), m_name, vit.base_seq()));
+                }
+                std::sort(results.begin(), results.end());
+                string& best_m_name = get<1>(results.back());
+                string& base_seq = get<2>(results.back());
+                LOG("main", info) << "basecalled read [" << read_summary.read_id << "] strand [" << st
+                                  << "] using model [" << best_m_name << "] and parameters "
+                                  << read_summary.params[st].at(best_m_name) << endl;
+                oss << ">" << read_summary.read_id << ":" << st << endl
+                    << base_seq << endl;
+            } // for st
+        },
+        // output_chunk
+        [&] (std::ostringstream& oss) {
+            *os_p << oss.str();
+        },
+        // progress_report
+        [&] (unsigned items, unsigned seconds) {
+            clog << "Processed " << setw(6) << right << items << " reads in "
+                 << setw(6) << right << seconds << " seconds\r";
+        });
 }
 
 void real_main()
 {
-    Model_Dict_Type models;
+    Pore_Model_Dict_Type models;
     State_Transitions_Type transitions;
     deque< Fast5_Summary_Type > reads;
     list< string > files;
-
+    // initialize structs
     init_models(models);
     init_transitions(transitions);
     init_files(files);
-    init_reads(files, reads);
-
+    init_reads(models, files, reads);
     // do some training
-
+    // ...
+    // basecall reads
     basecall_reads(models, transitions, reads);
-
-    /*
-    Viterbi<> vit;
-    vit.fill(pm, st, ev);
-    cout << vit.base_seq() << std::endl;
-    */
 }
 
 int main(int argc, char * argv[])

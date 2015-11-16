@@ -33,6 +33,7 @@ public:
     unsigned n_events() const { return _state_seq.size(); }
     const std::vector< unsigned >& state_seq() const { return _state_seq; }
     const std::string& base_seq() const { return _base_seq; }
+    Float_Type path_probability() const { return _path_probability; }
 
     // i: event index
     // j: state/kmer index
@@ -116,6 +117,7 @@ private:
     std::vector< Matrix_Entry > _m;
     std::vector< unsigned > _state_seq;
     std::string _base_seq;
+    Float_Type _path_probability;
 
     void fill_state_seq()
     {
@@ -129,6 +131,7 @@ private:
                 max_v = cell(n_events() - 1, j).alpha;
             }
         }
+        _path_probability = max_v;
         for (unsigned i = n_events() - 1; i > 0; --i)
         {
             _state_seq.at(i) = max_j;
@@ -153,5 +156,7 @@ private:
     }
 
 }; // class Viterbi
+
+typedef Viterbi<> Viterbi_Type;
 
 #endif
