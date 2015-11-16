@@ -35,6 +35,9 @@ namespace opts
     ValueArg< string > model_fofn("", "model-fofn", "File of pore models.", false, "", "file", cmd_parser);
     ValueArg< string > trans_fn("s", "trans", "Initial state transitions.", false, "", "file", cmd_parser);
     ValueArg< string > output_fn("o", "output", "Output.", false, "", "file", cmd_parser);
+    ValueArg< float > pr_stay("", "pr-stay", "Transition probability of staying in the same state.", false, .1, "float", cmd_parser);
+    ValueArg< float > pr_skip("", "pr-skip", "Transition probability of skipping at least 1 state.", false, .1, "float", cmd_parser);
+    ValueArg< float > pr_cutoff("", "pr-cutoff", "Minimum value for transition probabilities; smaller values are set to zero.", false, .001, "float", cmd_parser);
     UnlabeledMultiArg< string > input_fn("inputs", "Input files/directories", true, "path", cmd_parser);
 } // namespace opts
 
@@ -109,7 +112,19 @@ void init_models(Model_Dict_Type& models)
 }
 
 void init_transitions(State_Transitions_Type& transitions)
-{}
+{
+    if (not opts::trans_fn.get().empty())
+    {
+        zstr::ifstream(opts::trans_fn) >> transitions;
+        LOG("main", info) << "loaded state transitions from [" << opts::trans_fn.get() << "]" << endl;
+    }
+    else
+    {
+        transitions.compute_transitions(opts::pr_skip, opts::pr_stay, opts::pr_cutoff);
+        LOG("main", info) << "initialized state transitions with parameters p_skip=[" << opts::pr_skip
+                          << "], pr_stay=[" << opts::pr_stay << "], pr_cutoff=[" << opts::pr_cutoff << "]" << endl;
+    }
+}
 
 void init_files(list< string >& files)
 {}
