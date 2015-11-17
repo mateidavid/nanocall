@@ -4,7 +4,7 @@ HDF_ROOT = /usr
 
 OPT_FLAG = -O0
 CXXFLAGS = -Wall -Wextra -pedantic -g3 -ggdb -fno-eliminate-unused-debug-types ${OPT_FLAG}
-M_CXXFLAGS = -std=c++11
+M_CXXFLAGS = -std=c++11 -pthread
 CPPFLAGS = -isystem ${HDF_ROOT}/include -I fast5/src -I tclap/include
 
 TARGETS = compute-state-transitions compute-scaled-pore-model run-fwbw run-viterbi nanocall
