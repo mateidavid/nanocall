@@ -5,6 +5,10 @@
 #include <string>
 #include <vector>
 
+#ifndef H5_HAVE_THREADSAFE
+#include <mutex>
+#endif
+
 #include "Pore_Model.hpp"
 #include "fast5.hpp"
 #include "mean_stdv.hpp"
@@ -98,8 +102,13 @@ public:
         assert(valid and have_ed_events);
         if (ed_events.empty())
         {
+#ifndef H5_HAVE_THREADSAFE
+            static std::mutex fast5_mutex;
+            std::lock_guard< std::mutex > fast5_lock(fast5_mutex);
+#endif
             fast5::File f(file_name);
             load_ed_events(f);
+            f.close();
         }
         for (unsigned st = 0; st < 2; ++st)
         {

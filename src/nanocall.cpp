@@ -411,5 +411,11 @@ int main(int argc, char * argv[])
     Logger::set_default_level(Logger::level::info);
     Logger::set_levels_from_options(opts::log_level);
     Fast5_Summary_Type::min_read_len() = opts::min_read_len;
+#ifndef H5_HAVE_THREADSAFE
+    if (opts::num_threads > 1)
+    {
+        LOG("main", warning) << "enabled multi-threading with non-threadsafe HDF5: using experimental locking" << endl;
+    }
+#endif
     real_main();
 }
