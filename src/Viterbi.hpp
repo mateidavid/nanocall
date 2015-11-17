@@ -61,7 +61,7 @@ public:
                 cell(0, j).alpha = pm.log_pr_emission(j, ev[0]) - log_n_states;
                 // beta
                 cell(0, j).beta = n_states;
-                LOG("Viterbi", debug)
+                LOG("Viterbi", debug1)
                     << "i=0 j=" << Kmer_Type::to_string(j)
                     << " alpha=" << cell(0, j).alpha
                     << " beta=" << cell(0, j).beta << std::endl;
@@ -72,7 +72,7 @@ public:
         //
         for (unsigned i = 1; i < n_events; ++i)
         {
-            LOG("Viterbi", info) << "forward: i=" << i << std::endl;
+            LOG("Viterbi", debug) << "forward: i=" << i << std::endl;
             for (unsigned j = 0; j < n_states; ++j) // TODO: parallelize
             {
                 cell(i, j).alpha = -INFINITY;
@@ -89,7 +89,7 @@ public:
                     }
                 }
                 cell(i, j).alpha += pm.log_pr_emission(j, ev[i]);
-                LOG("Viterbi", debug)
+                LOG("Viterbi", debug1)
                     << "i=" << i << " j=" << Kmer_Type::to_string(j)
                     << " alpha=" << cell(i, j).alpha
                     << " beta=" << cell(i, j).beta << std::endl;
