@@ -79,8 +79,8 @@ public:
                     if (p.second.strand() == st or p.second.strand() == 2)
                     {
                         Pore_Model_Parameters_Type param;
-                        param.shift = r.first - p.second.mean();
                         param.scale = r.second / p.second.stdv();
+                        param.shift = r.first - param.scale * p.second.mean();
                         LOG("Fast5_Summary", debug)
                             << "read [" << read_id << "] strand [" << st
                             << "] model [" << p.first << "] initial parameters "
