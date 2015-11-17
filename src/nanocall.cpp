@@ -137,7 +137,11 @@ void init_files(list< string >& files)
             for (const auto& g : l)
             {
                 string f2 = f + (f[f.size() - 1] != '/'? "/" : "") + g;
-                if (fast5::File::is_valid_file(f2))
+                if (is_directory(f2))
+                {
+                    LOG("main", info) << "ignoring subdirectory [" << f2 << "]" << endl;
+                }
+                else if (fast5::File::is_valid_file(f2))
                 {
                     files.push_back(f2);
                     LOG("main", info) << "adding input file [" << f2 << "]" << endl;
