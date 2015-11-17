@@ -228,21 +228,13 @@ void train_reads(const Pore_Model_Dict_Type& models,
                         }
                     }
                     assert(not model_sublist.empty());
-                    // initialize parameters if not existing already
-                    for (const auto& m_name : model_sublist)
-                    {
-                        if (not read_summary.params[st].count(m_name))
-                        {
-                            read_summary.params[st][m_name] = Pore_Model_Parameters_Type();
-                        }
-                    }
                     // run fwbw
                     map< string, Forward_Backward_Type > results;
                     for (const auto& m_name : model_sublist)
                     {
-                        // scale model using current parameters
+                        // scale model using current parameters, initialize them if necessary
                         Pore_Model_Type pm(models.at(m_name));
-                        Pore_Model_Parameters_Type pm_params = read_summary.params[st].at(m_name);
+                        Pore_Model_Parameters_Type pm_params = read_summary.params[st][m_name];
                         pm.scale(pm_params);
                         // main work: fill matrix
                         results[m_name].fill(pm, transitions, read_summary.events[st]);
@@ -329,15 +321,6 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                         }
                     }
                 }
-                assert(not model_sublist.empty());
-                // initialize parameters if not existing already
-                for (const auto& m_name : model_sublist)
-                {
-                    if (not read_summary.params[st].count(m_name))
-                    {
-                        read_summary.params[st][m_name] = Pore_Model_Parameters_Type();
-                    }
-                }
                 // check main scaling parameters
                 auto r = get_mean_stdv< float >(
                     read_summary.events[st],
@@ -346,8 +329,9 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                 deque< tuple< float, string, string > > results;
                 for (const auto& m_name : model_sublist)
                 {
+                    // scale model, initialize default parameters if necessary
                     Pore_Model_Type pm(models.at(m_name));
-                    Pore_Model_Parameters_Type pm_params = read_summary.params[st].at(m_name);
+                    Pore_Model_Parameters_Type pm_params = read_summary.params[st][m_name];
                     pm.scale(pm_params);
                     if (std::abs(r.first - pm.mean()) > 5.0)
                     {
