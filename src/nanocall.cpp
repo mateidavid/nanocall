@@ -176,7 +176,9 @@ void init_reads(const Pore_Model_Dict_Type& models,
     {
         Fast5_Summary_Type s(f, models);
         LOG("main", info) << "summary: " << s << endl;
-        if (s.have_ed_events)
+        if (s.have_ed_events
+            and (s.strand_bounds[1] >= s.strand_bounds[0] + opts::min_read_len
+                 or s.strand_bounds[3] >= s.strand_bounds[2] + opts::min_read_len))
         {
             reads.emplace_back(move(s));
         }

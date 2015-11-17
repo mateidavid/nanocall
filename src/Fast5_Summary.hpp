@@ -12,6 +12,7 @@
 #include "Pore_Model.hpp"
 #include "fast5.hpp"
 #include "mean_stdv.hpp"
+#include "join.hpp"
 
 template < typename Float_Type = float >
 class Fast5_Summary
@@ -64,10 +65,10 @@ public:
                 auto pos = file_name.find_last_of('/');
                 read_id = file_name.substr(pos != std::string::npos? pos + 1 : 0);
             }
-            abasic_level = detect_abasic_level(ed_events);
+            abasic_level = detect_abasic_level();
             if (abasic_level > 1.0)
             {
-                strand_bounds = detect_strands(ed_events, abasic_level);
+                detect_strands();
             }
             // compute initial model scalings
             load_events();
@@ -167,9 +168,9 @@ private:
     }
 
     // crude detection of abasic level
-    static Float_Type detect_abasic_level(const std::vector< fast5::EventDetection_Event_Entry >& ev)
+    Float_Type detect_abasic_level()
     {
-        if (ev.size() < min_read_len())
+        if (ed_events.size() < min_read_len())
         {
             return 0.0;
         }
@@ -177,20 +178,20 @@ private:
         // use 1.0 pA + max level excluding to 5%
         //
         std::vector< Float_Type > s;
-        s.resize(ev.size());
+        s.resize(ed_events.size());
         unsigned i;
-        for (i = 0; i < ev.size(); ++i)
+        for (i = 0; i < ed_events.size(); ++i)
         {
-            s[i] = ev[i].mean;
+            s[i] = ed_events[i].mean;
         }
         std::sort(s.begin(), s.end());
         return s[99 * s.size() / 100] + 5.0f;
-    }
+    } // detect_abasic_level()
 
     // crude detection of abasic level
-    static Float_Type detect_abasic_level_2(const std::vector< fast5::EventDetection_Event_Entry >& ev)
+    Float_Type detect_abasic_level_2()
     {
-        if (ev.size() < min_read_len())
+        if (ed_events.size() < min_read_len())
         {
             return 0.0;
         }
@@ -199,11 +200,11 @@ private:
         // such that the next peak below it is more than 1pA lower
         //
         std::vector< Float_Type > s;
-        s.resize(ev.size());
+        s.resize(ed_events.size());
         unsigned i;
-        for (i = 0; i < ev.size(); ++i)
+        for (i = 0; i < ed_events.size(); ++i)
         {
-            s[i] = ev[i].mean;
+            s[i] = ed_events[i].mean;
         }
         std::sort(s.begin(), s.end());
         i = s.size() / 2;
@@ -213,30 +214,30 @@ private:
             return 0.0;
         }
         return s[i];
-    }
+    } // detect_abasic_level_2()
 
     // crude detection of strands in event sequence
-    static std::array< unsigned, 4 >
-    detect_strands(const std::vector< fast5::EventDetection_Event_Entry >& ev,
-                   Float_Type abasic_level)
+    void detect_strands()
     {
-        std::array< unsigned, 4 > res;
-        LOG("Fast5_Summary", debug) << "num_events=" << ev.size() << " abasic_level=" << abasic_level << std::endl;
+        strand_bounds = { 50, static_cast< unsigned >(ed_events.size() - 50), 0, 0 };
+        LOG("Fast5_Summary", debug)
+            << "num_events=" << ed_events.size()
+            << " abasic_level=" << abasic_level << std::endl;
         //
         // find islands of >= 5 consecutive events at high level
         //
         std::vector< std::pair< unsigned, unsigned > > islands;
         unsigned i = 0;
-        while (i < ev.size())
+        while (i < ed_events.size())
         {
-            if (ev[i].mean >= abasic_level)
+            if (ed_events[i].mean >= abasic_level)
             {
                 unsigned j = i + 1;
-                while (j < ev.size() and ev[j].mean >= abasic_level) ++j;
-                if (j > i + 5)
+                while (j < ed_events.size() and ed_events[j].mean >= abasic_level) ++j;
+                if (j - i >= 5)
                 {
                     islands.push_back(std::make_pair(i, j));
-                    LOG("Fast5_Summary", debug) << "found abasic island: [" << i << "," << j << "]" << std::endl;
+                    LOG("Fast5_Summary", debug) << "abasic_island [" << i << "," << j << "]" << std::endl;
                 }
                 i = j + 1;
             }
@@ -252,7 +253,7 @@ private:
         {
             if (islands[i - 1].second + 50 >= islands[i].first)
             {
-                LOG("Fast5_Summary", debug) << "merging islands: "
+                LOG("Fast5_Summary", debug) << "merge_islands "
                           << "[" << islands[i - 1].first << "," << islands[i - 1].second << "] with "
                           << "[" << islands[i].first << "," << islands[i].second << "]" << std::endl;
                 islands[i - 1].second = islands[i].second;
@@ -260,46 +261,61 @@ private:
                 i = 0;
             }
         }
-        std::ostringstream tmp;
-        for (i = 0; i < islands.size(); ++i)
+        LOG("Fast5_Summary", debug)
+            << "final_islands: " << join_ns::join(
+                islands, " ",
+                [] (const std::pair< unsigned, unsigned >& p) {
+                    std::ostringstream tmp;
+                    tmp << "[" << p.first << "," << p.second << "]";
+                    return tmp.str();
+                }) << std::endl;
+        if (islands.empty())
         {
-            tmp << " [" << islands[i].first << "," << islands[i].second << "]";
+            LOG("Fast5_Summary", info)
+                << "template_only read_id=[" << read_id << "]" << std::endl;
+            return;
         }
-        LOG("Fast5_Summary", debug) << "islands after merging:" << tmp.str() << std::endl;
         //
         // pick island closest to the middle of the event sequence
         //
-        auto it = min_of(
-            islands,
-            [&] (const std::pair< unsigned, unsigned >& p) {
-                return std::min(std::abs((long)p.first - (long)ev.size() / 2),
-                                std::abs((long)p.second - (long)ev.size() / 2));
-            });
-        if (islands.size() > 0)
+        auto dist_to_middle = [&] (const std::pair< unsigned, unsigned >& p) {
+            return std::min((unsigned)std::abs((long)p.first - (long)ed_events.size() / 2),
+                            (unsigned)std::abs((long)p.second - (long)ed_events.size() / 2));
+        };
+        auto it = min_of(islands, dist_to_middle);
+        // check island is in the middle third; if not, intepret it as template only
+        if (dist_to_middle(*it) < ed_events.size() / 3
+            or dist_to_middle(*it) > 2 * ed_events.size() / 3)
         {
-            LOG("Fast5_Summary", debug) << "selected hairpin island: ["
-                                << it->first << "," << it->second << "]" << std::endl;
-            res[0] = 50;
-            if (islands[0].first < 100)
-            {
-                res[0] = std::max(res[0], islands[0].second);
-            }
-            res[1] = it->first - 50;
-            res[2] = it->first + 50;
-            res[3] = ev.size() - 50;
-            if (islands[islands.size() - 1].second > ev.size() - 100)
-            {
-                res[3] = std::min(res[3], islands[islands.size() - 1].first);
-            }
+            LOG("Fast5_Summary", info)
+                << "drop_read read_id=[" << read_id
+                << "] islands=[" << join_ns::join(
+                    islands, " ",
+                    [] (const std::pair< unsigned, unsigned >& p) {
+                        std::ostringstream tmp;
+                        tmp << "[" << p.first << "," << p.second << "]";
+                        return tmp.str();
+                    })
+                << "]" << std::endl;
+            return;
         }
         else
         {
-            res[0] = 50;
-            res[1] = ev.size() - 50;
-            res[2] = 0;
-            res[3] = 0;
+            LOG("Fast5_Summary", debug)
+                << "hairpin_island [" << it->first << "," << it->second << "]" << std::endl;
+            strand_bounds[0] = 50;
+            if (islands[0].first < 100)
+            {
+                strand_bounds[0] = std::max(strand_bounds[0], islands[0].second);
+            }
+            strand_bounds[1] = it->first - 50;
+            strand_bounds[2] = it->first + 50;
+            strand_bounds[3] = ed_events.size() - 50;
+            if (islands[islands.size() - 1].second > ed_events.size() - 100)
+            {
+                strand_bounds[3] = std::min(strand_bounds[3], islands[islands.size() - 1].first);
+            }
         }
-        return res;
     } // detect_strands()
 
     // crude filtering of eventdetection events
