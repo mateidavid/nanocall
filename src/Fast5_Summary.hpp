@@ -284,8 +284,7 @@ private:
         };
         auto it = min_of(islands, dist_to_middle);
         // check island is in the middle third; if not, intepret it as template only
-        if (dist_to_middle(*it) < ed_events.size() / 3
-            or dist_to_middle(*it) > 2 * ed_events.size() / 3)
+        if (dist_to_middle(*it) > ed_events.size() / 6)
         {
             LOG("Fast5_Summary", info)
                 << "drop_read read_id=[" << read_id
