@@ -33,6 +33,7 @@ namespace opts
     ValueArg< float > pr_skip("", "pr-skip", "Transition probability of skipping at least 1 state.", false, .1, "float", cmd_parser);
     ValueArg< float > pr_cutoff("", "pr-cutoff", "Minimum value for transition probabilities; smaller values are set to zero.", false, .001, "float", cmd_parser);
     ValueArg< unsigned > min_read_len("", "min-len", "Minimum read length.", false, 1000, "int", cmd_parser);
+    ValueArg< unsigned > fasta_line_width("", "fasta-line-width", "Maximum fasta line width.", false, 80, "int", cmd_parser);
     UnlabeledMultiArg< string > input_fn("inputs", "Input files/directories", true, "path", cmd_parser);
 } // namespace opts
 
@@ -267,6 +268,15 @@ void train_reads(const Pore_Model_Dict_Type& models,
     } // for round
 } // train_reads
 
+void write_fasta(ostream& os, const string& name, const string& seq)
+{
+    os << ">" << name << endl;
+    for (unsigned pos = 0; pos < seq.size(); pos += opts::fasta_line_width)
+    {
+        os << seq.substr(pos, opts::fasta_line_width) << endl;
+    }
+} // write_fasta
+
 void basecall_reads(const Pore_Model_Dict_Type& models,
                     const State_Transitions_Type& transitions,
                     deque< Fast5_Summary_Type >& reads)
@@ -355,11 +365,14 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                 std::sort(results.begin(), results.end());
                 string& best_m_name = get<1>(results.back());
                 string& base_seq = get<2>(results.back());
-                LOG("main", info) << "basecalled read [" << read_summary.read_id << "] strand [" << st
-                                  << "] using model [" << best_m_name << "] and parameters "
-                                  << read_summary.params[st].at(best_m_name) << endl;
-                oss << ">" << read_summary.read_id << ":" << st << endl
-                    << base_seq << endl;
+                LOG("main", info)
+                    << "best_model read [" << read_summary.read_id
+                    << "] strand [" << st
+                    << "] model [" << best_m_name
+                    << "] parameters " << read_summary.params[st].at(best_m_name) << endl;
+                ostringstream tmp;
+                tmp << read_summary.read_id << ":" << st;
+                write_fasta(oss, tmp.str(), base_seq);
             } // for st
             read_summary.drop_events();
         },
