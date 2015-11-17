@@ -32,6 +32,7 @@ namespace opts
     ValueArg< float > pr_stay("", "pr-stay", "Transition probability of staying in the same state.", false, .1, "float", cmd_parser);
     ValueArg< float > pr_skip("", "pr-skip", "Transition probability of skipping at least 1 state.", false, .1, "float", cmd_parser);
     ValueArg< float > pr_cutoff("", "pr-cutoff", "Minimum value for transition probabilities; smaller values are set to zero.", false, .001, "float", cmd_parser);
+    ValueArg< unsigned > min_read_len("", "min-len", "Minimum read length.", false, 1000, "int", cmd_parser);
     UnlabeledMultiArg< string > input_fn("inputs", "Input files/directories", true, "path", cmd_parser);
 } // namespace opts
 
@@ -206,7 +207,7 @@ void train_reads(const Pore_Model_Dict_Type& models,
                 for (unsigned st = 0; st < 2; ++st)
                 {
                     // if not enough events, ignore strand
-                    if (read_summary.events[st].size() < 100) continue;
+                    if (read_summary.events[st].size() < opts::min_read_len) continue;
                     // create list of models to try
                     list< string > model_sublist;
                     if (models.count(read_summary.preferred_model[st]))
@@ -299,7 +300,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
             for (unsigned st = 0; st < 2; ++st)
             {
                 // if not enough events, ignore strand
-                if (read_summary.events[st].size() < 100) continue;
+                if (read_summary.events[st].size() < opts::min_read_len) continue;
                 // create list of models to try
                 list< string > model_sublist;
                 if (models.count(read_summary.preferred_model[st]))
@@ -395,5 +396,6 @@ int main(int argc, char * argv[])
     opts::cmd_parser.parse(argc, argv);
     Logger::set_default_level(Logger::level::info);
     Logger::set_levels_from_options(opts::log_level);
+    Fast5_Summary_Type::min_read_len() = opts::min_read_len;
     real_main();
 }

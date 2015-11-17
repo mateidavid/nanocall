@@ -28,6 +28,12 @@ public:
     bool have_ed_events;
     bool valid;
 
+    static unsigned& min_read_len()
+    {
+        static unsigned _min_read_len = 1000;
+        return _min_read_len;
+    }
+
     // from fast5 file
     std::vector< fast5::EventDetection_Event_Entry > ed_events;
     // filtered
@@ -63,7 +69,7 @@ public:
             load_events();
             for (unsigned st = 0; st < 2; ++st)
             {
-                if (events[st].size() < 100)
+                if (events[st].size() < min_read_len())
                 {
                     continue;
                 }
@@ -154,7 +160,7 @@ private:
     // crude detection of abasic level
     static Float_Type detect_abasic_level(const std::vector< fast5::EventDetection_Event_Entry >& ev)
     {
-        if (ev.size() < 100)
+        if (ev.size() < min_read_len())
         {
             return 0.0;
         }
@@ -175,7 +181,7 @@ private:
     // crude detection of abasic level
     static Float_Type detect_abasic_level_2(const std::vector< fast5::EventDetection_Event_Entry >& ev)
     {
-        if (ev.size() < 100)
+        if (ev.size() < min_read_len())
         {
             return 0.0;
         }
