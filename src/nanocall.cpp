@@ -325,6 +325,11 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                 auto r = get_mean_stdv< float >(
                     read_summary.events[st],
                     [] (const Event_Type& ev) { return ev.mean; });
+                LOG("main", debug)
+                    << "mean_stdv read [" << read_summary.read_id
+                    << "] strand [" << st
+                    << "] ev_mean=[" << r.first
+                    << "] ev_stdv=[" << r.second << "]" << endl;
                 // deque of results
                 deque< tuple< float, string, string > > results;
                 for (const auto& m_name : model_sublist)
@@ -333,14 +338,26 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                     Pore_Model_Type pm(models.at(m_name));
                     Pore_Model_Parameters_Type pm_params = read_summary.params[st][m_name];
                     pm.scale(pm_params);
+                    LOG("main", info)
+                        << "basecalling read [" << read_summary.read_id
+                        << "] strand [" << st
+                        << "] model [" << m_name
+                        << "] parameters " << pm_params << endl;
+                    LOG("main", debug)
+                        << "mean_stdv read [" << read_summary.read_id
+                        << "] strand [" << st
+                        << "] model_mean [" << pm.mean()
+                        << "] model_stdv [" << pm.stdv() << "]" << endl;
                     if (std::abs(r.first - pm.mean()) > 5.0)
                     {
                         LOG("main", warning)
-                            << "basecalling read [" << read_summary.read_id << "] strand [" << st
-                            << "] using model [" << m_name << "] and parameters "
-                            << read_summary.params[st].at(m_name)
-                            << " but model_mean=[" << pm.mean() << "] and events_mean=[" << r.first
-                            << "] are far apart!" << endl;
+                            << "means_apart read [" << read_summary.read_id
+                            << "] strand [" << st
+                            << "] model [" << m_name
+                            << "] parameters " << read_summary.params[st].at(m_name)
+                            << " model_mean=[" << pm.mean()
+                            << "] events_mean=[" << r.first
+                            << "]" << endl;
                     }
                     Viterbi_Type vit;
                     vit.fill(pm, transitions, read_summary.events.at(st));
