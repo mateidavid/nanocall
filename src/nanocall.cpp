@@ -28,6 +28,7 @@ namespace opts
     MultiArg< string > model_fn("m", "model", "Pore model.", false, "file", cmd_parser);
     ValueArg< string > model_fofn("", "model-fofn", "File of pore models.", false, "", "file", cmd_parser);
     ValueArg< string > trans_fn("s", "trans", "Initial state transitions.", false, "", "file", cmd_parser);
+    ValueArg< string > stats_fn("", "stats", "Stats.", false, "", "file", cmd_parser);
     ValueArg< string > output_fn("o", "output", "Output.", false, "", "file", cmd_parser);
     ValueArg< float > pr_stay("", "pr-stay", "Transition probability of staying in the same state.", false, .1, "float", cmd_parser);
     ValueArg< float > pr_skip("", "pr-skip", "Transition probability of skipping at least 1 state.", false, .1, "float", cmd_parser);
@@ -377,8 +378,9 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                     << "] strand [" << st
                     << "] model [" << best_m_name
                     << "] parameters " << read_summary.params[st].at(best_m_name) << endl;
+                read_summary.preferred_model[st] = best_m_name;
                 ostringstream tmp;
-                tmp << read_summary.read_id << ":" << st;
+                tmp << read_summary.read_id << ":" << read_summary.base_file_name << ":" << st;
                 write_fasta(oss, tmp.str(), base_seq);
             } // for st
             read_summary.drop_events();
@@ -409,6 +411,16 @@ void real_main()
     train_reads(models, transitions, reads);
     // basecall reads
     basecall_reads(models, transitions, reads);
+    // print stats
+    if (not opts::stats_fn.get().empty())
+    {
+        strict_fstream::ofstream ofs(opts::stats_fn);
+        for (const auto& s : reads)
+        {
+            s.write_tsv(ofs);
+            ofs << endl;
+        }
+    }
 }
 
 int main(int argc, char * argv[])

@@ -24,6 +24,7 @@ public:
     typedef Event_Sequence< Float_Type > Event_Sequence_Type;
 
     std::string file_name;
+    std::string base_file_name;
     std::string read_id;
     std::array< std::string, 2 > preferred_model;
     std::array< std::map< std::string, Pore_Model_Parameters_Type >, 2 > params;
@@ -51,9 +52,16 @@ public:
     {
         valid = true;
         file_name = fn;
+        auto pos = file_name.find_last_of('/');
+        base_file_name = (pos != std::string::npos? file_name.substr(pos + 1) : file_name);
+        if (base_file_name.substr(base_file_name.size() - 6) == ".fast5")
+        {
+            base_file_name.resize(base_file_name.size() - 6);
+        }
         fast5::File f(file_name);
         have_ed_events = f.have_eventdetection_events();
         num_ed_events = 0;
+        abasic_level = 0.0;
         if (have_ed_events)
         {
             load_ed_events(f);
@@ -62,8 +70,7 @@ public:
             read_id = ed_params.read_id;
             if (read_id.empty())
             {
-                auto pos = file_name.find_last_of('/');
-                read_id = file_name.substr(pos != std::string::npos? pos + 1 : 0);
+                read_id = base_file_name;
             }
             abasic_level = detect_abasic_level();
             if (abasic_level > 1.0)
@@ -141,7 +148,7 @@ public:
 
     friend std::ostream& operator << (std::ostream& os, const Fast5_Summary& fs)
     {
-        os << "[file_name=" << fs.file_name << " valid=" << fs.valid;
+        os << "[base_file_name=" << fs.base_file_name << " valid=" << fs.valid;
         if (fs.valid)
         {
             os << " have_ed_events=" << fs.have_ed_events;
@@ -158,6 +165,27 @@ public:
         }
         os << "]";
         return os;
+    }
+
+    void write_tsv(std::ostream& os) const
+    {
+        assert(have_ed_events);
+        os << base_file_name << '\t' << read_id << '\t' << num_ed_events << '\t' << abasic_level
+           << '\t' << strand_bounds[0] << '\t' << strand_bounds[1]
+           << '\t' << strand_bounds[2] << '\t' << strand_bounds[3]
+           << '\t' << preferred_model[0] << '\t' << preferred_model[1];
+        for (unsigned st = 0; st < 2; ++st)
+        {
+            os << '\t';
+            if (params[st].count(preferred_model[st]))
+            {
+                params[st].at(preferred_model[st]).write_tsv(os);
+            }
+            else
+            {
+                Pore_Model_Parameters_Type().write_tsv(os);
+            }
+        }
     }
 
 private:

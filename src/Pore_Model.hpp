@@ -11,6 +11,7 @@
 
 #include <cassert>
 #include <cmath>
+#include <iomanip>
 #include <iostream>
 #include <map>
 #include <string>
@@ -67,6 +68,11 @@ struct Pore_Model_Parameters
         os << "[scale=" << p.scale << " shift=" << p.shift << " drift=" << p.drift
            << " var=" << p.var << " scale_sd=" << p.scale_sd << " var_sd=" << p.var_sd << "]";
         return os;
+    }
+    void write_tsv(std::ostream& os) const
+    {
+        os << std::fixed << std::setprecision(5)
+           << scale << '\t' << shift << '\t' << drift << '\t' << var << '\t' << scale_sd << '\t' << var_sd;
     }
 }; // struct Pore_Model_Parameters
 
