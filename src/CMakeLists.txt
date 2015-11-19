@@ -15,7 +15,7 @@ endif()
 # general cmake settings
 cmake_minimum_required(VERSION 2.8.12)
 project(NANOCALL C CXX)
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
 include(CheckLibraryExists)
 include(CheckIncludeFileCXX)
 include(ExternalProject)
@@ -63,7 +63,7 @@ set(CMAKE_BUILD_WITH_INSTALL_RPATH true)
 # => ZLIB_INCLUDE_DIRS, ZLIB_LIBRARIES
 find_package(ZLIB REQUIRED)
 
-# check for HDF5
+# find HDF5
 # => HDF5_INCLUDE_DIRS, HDF5_LIBRARIES
 if(BUILD_HDF5)
     message(STATUS "Building HDF5 in: ${OPTIONAL_SUBMODULE_PREFIX}")
@@ -89,7 +89,7 @@ if(BUILD_HDF5)
         message(FATAL_ERROR "Building HDF5 not supported on Windows")
     endif()
 else()
-    find_package(HDF5 REQUIRED)
+    find_package(HDF5 1.8.11 REQUIRED)
 endif()
 
 message(STATUS "HDF5_INCLUDE_DIRS=${HDF5_INCLUDE_DIRS}")
@@ -124,17 +124,12 @@ message(STATUS "CMAKE_CXX_FLAGS='${CMAKE_CXX_FLAGS}'")
 
 ### build-specific compile flags
 
-# compile flags for Debug build
 set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g3 -ggdb -fno-inline -fno-eliminate-unused-debug-types")
-# compile flags for Test build
 set(CMAKE_CXX_FLAGS_TEST "-O3 -g3 -fno-eliminate-unused-debug-types")
 set(CMAKE_CXX_FLAGS_TEST_O2 "-O2 -g3 -fno-eliminate-unused-debug-types")
 set(CMAKE_CXX_FLAGS_TEST_O1 "-O1 -g3 -fno-eliminate-unused-debug-types")
-# compile flags for Release build
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -DDISABLE_ASSERTS")
-# compile flags for GProf build
 set(CMAKE_CXX_FLAGS_GPROF "-O3 -g3 -pg")
-# compile flags for GProfRel build
 set(CMAKE_CXX_FLAGS_GPROFREL "-O3 -DNDEBUG -DDISABLE_ASSERTS -pg")
 
 # link flags
