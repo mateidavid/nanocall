@@ -26,17 +26,17 @@ namespace opts
     string description = "Call bases in Oxford Nanopore reads.";
     CmdLine cmd_parser(description, ' ', package_version);
     MultiArg< string > log_level("", "log", "Log level.", false, "string", cmd_parser);
-    ValueArg< unsigned > num_threads("t", "threads", "Number of parallel threads.", false, 1, "int", cmd_parser);
-    MultiArg< string > model_fn("m", "model", "Pore model.", false, "file", cmd_parser);
-    ValueArg< string > model_fofn("", "model-fofn", "File of pore models.", false, "", "file", cmd_parser);
-    ValueArg< string > trans_fn("s", "trans", "Initial state transitions.", false, "", "file", cmd_parser);
     ValueArg< string > stats_fn("", "stats", "Stats.", false, "", "file", cmd_parser);
-    ValueArg< string > output_fn("o", "output", "Output.", false, "", "file", cmd_parser);
-    ValueArg< float > pr_stay("", "pr-stay", "Transition probability of staying in the same state.", false, .1, "float", cmd_parser);
-    ValueArg< float > pr_skip("", "pr-skip", "Transition probability of skipping at least 1 state.", false, .1, "float", cmd_parser);
-    ValueArg< float > pr_cutoff("", "pr-cutoff", "Minimum value for transition probabilities; smaller values are set to zero.", false, .001, "float", cmd_parser);
     ValueArg< unsigned > min_read_len("", "min-len", "Minimum read length.", false, 1000, "int", cmd_parser);
     ValueArg< unsigned > fasta_line_width("", "fasta-line-width", "Maximum fasta line width.", false, 80, "int", cmd_parser);
+    ValueArg< float > pr_cutoff("", "pr-cutoff", "Minimum value for transition probabilities; smaller values are set to zero.", false, .001, "float", cmd_parser);
+    ValueArg< float > pr_skip("", "pr-skip", "Transition probability of skipping at least 1 state.", false, .1, "float", cmd_parser);
+    ValueArg< float > pr_stay("", "pr-stay", "Transition probability of staying in the same state.", false, .1, "float", cmd_parser);
+    ValueArg< string > trans_fn("s", "trans", "Custom initial state transitions.", false, "", "file", cmd_parser);
+    ValueArg< string > model_fofn("", "model-fofn", "File of pore models.", false, "", "file", cmd_parser);
+    MultiArg< string > model_fn("m", "model", "Custom pore model.", false, "file", cmd_parser);
+    ValueArg< string > output_fn("o", "output", "Output.", false, "", "file", cmd_parser);
+    ValueArg< unsigned > num_threads("t", "threads", "Number of parallel threads.", false, 1, "int", cmd_parser);
     UnlabeledMultiArg< string > input_fn("inputs", "Input files/directories", true, "path", cmd_parser);
 } // namespace opts
 
