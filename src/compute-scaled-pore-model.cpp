@@ -42,6 +42,6 @@ void real_main()
 int main(int argc, char * argv[])
 {
     opts::cmd_parser.parse(argc, argv);
-    Logger::set_levels_from_options(opts::log_level);
+    logger::Logger::set_levels_from_options(opts::log_level);
     real_main();
 }

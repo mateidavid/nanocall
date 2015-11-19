@@ -11,6 +11,7 @@
 #include "Viterbi.hpp"
 #include "Forward_Backward.hpp"
 #include "logger.hpp"
+#include "alg.hpp"
 #include "zstr.hpp"
 #include "fast5.hpp"
 #include "pfor.hpp"
@@ -329,7 +330,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                     }
                 }
                 // check main scaling parameters
-                auto r = get_mean_stdv< float >(
+                auto r = alg::mean_stdv_of< float >(
                     read_summary.events[st],
                     [] (const Event_Type& ev) { return ev.mean; });
                 LOG("main", debug)
@@ -426,8 +427,8 @@ void real_main()
 int main(int argc, char * argv[])
 {
     opts::cmd_parser.parse(argc, argv);
-    Logger::set_default_level(Logger::level::info);
-    Logger::set_levels_from_options(opts::log_level);
+    logger::Logger::set_default_level(logger::level::info);
+    logger::Logger::set_levels_from_options(opts::log_level);
     Fast5_Summary_Type::min_read_len() = opts::min_read_len;
 #ifndef H5_HAVE_THREADSAFE
     if (opts::num_threads > 1)

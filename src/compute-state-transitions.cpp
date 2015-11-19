@@ -27,16 +27,7 @@ void real_main()
     st.compute_transitions(opts::p_skip, opts::p_stay, opts::p_cutoff);
     if (not opts::output_file_name.get().empty())
     {
-        string fn = opts::output_file_name.get();
-        /*
-        if (fn.size() >= 4 and fn.substr(fn.size() - 3) == ".gz")
-        {
-            zstr::ofstream os(fn);
-            print_state_transitions(st, os);
-        }
-        else
-        */
-        strict_fstream::ofstream(fn) << st;
+        strict_fstream::ofstream(opts::output_file_name) << st;
     }
     else
     {
@@ -47,6 +38,6 @@ void real_main()
 int main(int argc, char * argv[])
 {
     opts::cmd_parser.parse(argc, argv);
-    Logger::set_levels_from_options(opts::log_level);
+    logger::Logger::set_levels_from_options(opts::log_level);
     real_main();
 }

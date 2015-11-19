@@ -11,8 +11,7 @@
 
 #include "Pore_Model.hpp"
 #include "fast5.hpp"
-#include "mean_stdv.hpp"
-#include "join.hpp"
+#include "alg.hpp"
 
 template < typename Float_Type = float >
 class Fast5_Summary
@@ -85,7 +84,7 @@ public:
                 {
                     continue;
                 }
-                auto r = get_mean_stdv< Float_Type >(events[st], [] (const Event_Type& ev) { return ev.mean; });
+                auto r = alg::mean_stdv_of< Float_Type >(events[st], [] (const Event_Type& ev) { return ev.mean; });
                 for (const auto& p : models)
                 {
                     if (p.second.strand() == st or p.second.strand() == 2)
@@ -290,7 +289,7 @@ private:
             }
         }
         LOG("Fast5_Summary", debug)
-            << "final_islands: " << join_ns::join(
+            << "final_islands: " << alg::os_join(
                 islands, " ",
                 [] (const std::pair< unsigned, unsigned >& p) {
                     std::ostringstream tmp;
@@ -310,13 +309,13 @@ private:
             return std::min((unsigned)std::abs((long)p.first - (long)ed_events.size() / 2),
                             (unsigned)std::abs((long)p.second - (long)ed_events.size() / 2));
         };
-        auto it = min_of(islands, dist_to_middle);
+        auto it = alg::min_of(islands, dist_to_middle);
         // check island is in the middle third; if not, intepret it as template only
         if (dist_to_middle(*it) > ed_events.size() / 6)
         {
             LOG("Fast5_Summary", info)
                 << "drop_read read_id=[" << read_id
-                << "] islands=[" << join_ns::join(
+                << "] islands=[" << alg::os_join(
                     islands, " ",
                     [] (const std::pair< unsigned, unsigned >& p) {
                         std::ostringstream tmp;

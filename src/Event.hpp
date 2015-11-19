@@ -8,7 +8,7 @@
 
 #include "fast5.hpp"
 #include "logger.hpp"
-#include "algorithm_extra.hpp"
+#include "alg.hpp"
 
 template < typename Float_Type = float >
 class Event

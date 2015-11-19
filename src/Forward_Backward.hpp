@@ -19,7 +19,7 @@ public:
     typedef Pore_Model< Float_Type, Kmer_Size > Pore_Model_Type;
     typedef State_Transitions< Float_Type, Kmer_Size > State_Transitions_Type;
     typedef Event< Float_Type > Event_Type;
-    typedef logsumset< Float_Type > LogSumSet_Type;
+    typedef logsum::logsumset< Float_Type > LogSumSet_Type;
 
     struct Matrix_Entry
     {

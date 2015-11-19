@@ -43,7 +43,7 @@ public:
         }
         for (unsigned i = 0; i < n_states; ++i)
         {
-            logsumset< Float_Type > s(false);
+            logsum::logsumset< Float_Type > s(false);
             for (const auto& p : neighbours(i).to_v)
             {
                 neighbours(p.first).from_v.push_back(std::make_pair(i, p.second));
@@ -53,7 +53,7 @@ public:
         }
         for (unsigned i = 0; i < n_states; ++i)
         {
-            logsumset< Float_Type > s(false);
+            logsum::logsumset< Float_Type > s(false);
             for (const auto& p : neighbours(i).from_v)
             {
                 s.add(p.second);

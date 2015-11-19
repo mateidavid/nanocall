@@ -19,7 +19,7 @@
 #include "Kmer.hpp"
 #include "Event.hpp"
 #include "fast5.hpp"
-#include "mean_stdv.hpp"
+#include "alg.hpp"
 
 template < typename Float_Type >
 inline Float_Type log_normal_pdf(Float_Type x, Float_Type mean, Float_Type stdv, Float_Type log_stdv)
@@ -241,7 +241,7 @@ private:
     void update_statistics()
     {
         assert(_state.size() == n_states);
-        std::tie(_mean, _stdv) = get_mean_stdv< Float_Type >(
+        std::tie(_mean, _stdv) = alg::mean_stdv_of< Float_Type >(
             _state,
             [] (const Pore_Model_State_Type& s) { return s.level_mean; });
     }
