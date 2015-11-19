@@ -149,8 +149,7 @@ add_custom_target(package_version
     )
 
 ### Enable testing targets
-#
-enable_testing()
+#enable_testing()
 
 ### Descend into subdirectories
 #
