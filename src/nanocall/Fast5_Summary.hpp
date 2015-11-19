@@ -53,6 +53,7 @@ public:
         file_name = fn;
         auto pos = file_name.find_last_of('/');
         base_file_name = (pos != std::string::npos? file_name.substr(pos + 1) : file_name);
+        strand_bounds = { 0, 0, 0, 0 };
         if (base_file_name.substr(base_file_name.size() - 6) == ".fast5")
         {
             base_file_name.resize(base_file_name.size() - 6);
@@ -74,34 +75,34 @@ public:
             abasic_level = detect_abasic_level();
             if (abasic_level > 1.0)
             {
+                // compute initial model scalings
                 detect_strands();
-            }
-            // compute initial model scalings
-            load_events();
-            for (unsigned st = 0; st < 2; ++st)
-            {
-                if (events[st].size() < min_read_len())
+                load_events();
+                for (unsigned st = 0; st < 2; ++st)
                 {
-                    continue;
-                }
-                auto r = alg::mean_stdv_of< Float_Type >(events[st], [] (const Event_Type& ev) { return ev.mean; });
-                for (const auto& p : models)
-                {
-                    if (p.second.strand() == st or p.second.strand() == 2)
+                    if (events[st].size() < min_read_len())
                     {
-                        Pore_Model_Parameters_Type param;
-                        param.scale = r.second / p.second.stdv();
-                        param.shift = r.first - param.scale * p.second.mean();
-                        LOG("Fast5_Summary", debug)
-                            << "read [" << read_id << "] strand [" << st
-                            << "] model [" << p.first << "] initial parameters "
-                            << param << std::endl;
-                        params[st][p.first] = std::move(param);
+                        continue;
+                    }
+                    auto r = alg::mean_stdv_of< Float_Type >(events[st], [] (const Event_Type& ev) { return ev.mean; });
+                    for (const auto& p : models)
+                    {
+                        if (p.second.strand() == st or p.second.strand() == 2)
+                        {
+                            Pore_Model_Parameters_Type param;
+                            param.scale = r.second / p.second.stdv();
+                            param.shift = r.first - param.scale * p.second.mean();
+                            LOG("Fast5_Summary", debug)
+                                << "read [" << read_id << "] strand [" << st
+                                << "] model [" << p.first << "] initial parameters "
+                                << param << std::endl;
+                            params[st][p.first] = std::move(param);
+                        }
                     }
                 }
-            }
-            ed_events.clear();
-        }
+                ed_events.clear();
+            } // if abasic_level > 1.0
+        } // if have_ed_events
     }
 
     void load_events()
