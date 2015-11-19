@@ -3,6 +3,7 @@
 #include <string>
 #include <tclap/CmdLine.h>
 
+#include "version.hpp"
 #include "Pore_Model.hpp"
 #include "Builtin_Model.hpp"
 #include "State_Transitions.hpp"
@@ -22,8 +23,8 @@ using namespace std;
 namespace opts
 {
     using namespace TCLAP;
-    string description = "Call bases in ONT reads";
-    CmdLine cmd_parser(description);
+    string description = "Call bases in Oxford Nanopore reads.";
+    CmdLine cmd_parser(description, ' ', package_version);
     MultiArg< string > log_level("", "log", "Log level.", false, "string", cmd_parser);
     ValueArg< unsigned > num_threads("t", "threads", "Number of parallel threads.", false, 1, "int", cmd_parser);
     MultiArg< string > model_fn("m", "model", "Pore model.", false, "file", cmd_parser);
