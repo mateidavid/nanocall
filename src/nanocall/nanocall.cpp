@@ -47,7 +47,7 @@ void init_models(Pore_Model_Dict_Type& models)
             or (s[0] != '0' and s[0] != '1' and s[0] != '2')
             or s[1] != ':')
         {
-            cerr << "could not parse model name: \"" << s << "\"; format should be \"[0|1|2]:<file>\"" << endl;
+            LOG(error) << "could not parse model name: \"" << s << "\"; format should be \"[0|1|2]:<file>\"" << endl;
             exit(EXIT_FAILURE);
         }
         unsigned st = s[0] - '0';
@@ -75,8 +75,8 @@ void init_models(Pore_Model_Dict_Type& models)
     }
     if (model_list[2].empty() and (model_list[0].empty() != model_list[1].empty()))
     {
-        cerr << "models were specified only for strand " << (int)model_list[0].empty()
-             << "! give models for both strands, or for neither." << endl;
+        LOG(error) << "models were specified only for strand " << (int)model_list[0].empty()
+                   << "! give models for both strands, or for neither." << endl;
         exit(EXIT_FAILURE);
     }
     if (not (model_list[0].empty() and model_list[1].empty() and model_list[2].empty()))
@@ -187,6 +187,11 @@ void init_files(list< string >& files)
                 }
             }
         }
+    }
+    if (files.empty())
+    {
+        LOG(error) << "no fast5 files to process" << endl;
+        exit(EXIT_FAILURE);
     }
 } // init_files
 
