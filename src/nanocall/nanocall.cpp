@@ -37,7 +37,7 @@ namespace opts
     MultiArg< string > model_fn("m", "model", "Custom pore model.", false, "file", cmd_parser);
     ValueArg< string > output_fn("o", "output", "Output.", false, "", "file", cmd_parser);
     ValueArg< unsigned > num_threads("t", "threads", "Number of parallel threads.", false, 1, "int", cmd_parser);
-    UnlabeledMultiArg< string > input_fn("inputs", "Input files/directories", true, "path", cmd_parser);
+    UnlabeledMultiArg< string > input_fn("inputs", "Inputs. Accepts: directories, fast5 files, or files of fast5 file names (use \"-\" to read fofn from stdin).", true, "path", cmd_parser);
 } // namespace opts
 
 void init_models(Pore_Model_Dict_Type& models)
@@ -90,7 +90,7 @@ void init_models(Pore_Model_Dict_Type& models)
                 zstr::ifstream(e) >> pm;
                 pm.strand() = st;
                 models[pm_name] = move(pm);
-                LOG("main", info) << "loaded module [" << pm_name << "] for strand [" << st << "]" << endl;
+                LOG(info) << "loaded module [" << pm_name << "] for strand [" << st << "]" << endl;
             }
         }
     }
@@ -104,7 +104,7 @@ void init_models(Pore_Model_Dict_Type& models)
             pm.load_from_vector(Builtin_Model::init_lists[i]);
             pm.strand() = Builtin_Model::strands[i];
             models[Builtin_Model::names[i]] = move(pm);
-            LOG("main", info)
+            LOG(info)
                 << "loaded builtin module [" << Builtin_Model::names[i] << "] for strand ["
                 << Builtin_Model::strands[i] << "] statistics [mean=" << pm.mean() << ", stdv="
                 << pm.stdv() << "]" << endl;
@@ -117,13 +117,13 @@ void init_transitions(State_Transitions_Type& transitions)
     if (not opts::trans_fn.get().empty())
     {
         zstr::ifstream(opts::trans_fn) >> transitions;
-        LOG("main", info) << "loaded state transitions from [" << opts::trans_fn.get() << "]" << endl;
+        LOG(info) << "loaded state transitions from [" << opts::trans_fn.get() << "]" << endl;
     }
     else
     {
         transitions.compute_transitions(opts::pr_skip, opts::pr_stay, opts::pr_cutoff);
-        LOG("main", info) << "initialized state transitions with parameters p_skip=[" << opts::pr_skip
-                          << "], pr_stay=[" << opts::pr_stay << "], pr_cutoff=[" << opts::pr_cutoff << "]" << endl;
+        LOG(info) << "initialized state transitions with parameters p_skip=[" << opts::pr_skip
+                  << "], pr_stay=[" << opts::pr_stay << "], pr_cutoff=[" << opts::pr_cutoff << "]" << endl;
     }
 } // init_transitions
 
@@ -142,30 +142,49 @@ void init_files(list< string >& files)
                 string f2 = f + (f[f.size() - 1] != '/'? "/" : "") + g;
                 if (is_directory(f2))
                 {
-                    LOG("main", info) << "ignoring subdirectory [" << f2 << "]" << endl;
+                    LOG(info) << "ignoring subdirectory [" << f2 << "]" << endl;
                 }
                 else if (fast5::File::is_valid_file(f2))
                 {
                     files.push_back(f2);
-                    LOG("main", info) << "adding input file [" << f2 << "]" << endl;
+                    LOG(info) << "adding input file [" << f2 << "]" << endl;
                 }
                 else
                 {
-                    LOG("main", info) << "ignoring file [" << f2 << "]" << endl;
+                    LOG(info) << "ignoring file [" << f2 << "]" << endl;
                 }
             }
         }
         else // not a directory
         {
-            if (fast5::File::is_valid_file(f))
+            if (f != "-" and fast5::File::is_valid_file(f))
             {
                 files.push_back(f);
-                LOG("main", info) << "adding input file [" << f << "]" << endl;
+                LOG(info) << "adding input file [" << f << "]" << endl;
             }
-            else
+            else // not fast5, interpret as fofn
             {
-                cerr << "error opening fast5 file [" << f << "]" << endl;
-                exit(EXIT_FAILURE);
+                LOG(info) << "interpreting [" << f << "] as fofn" << endl;
+                istream* is_p = nullptr;
+                strict_fstream::ifstream ifs;
+                if (f == "-")
+                {
+                    is_p = &cin;
+                }
+                else
+                {
+                    ifs.open(f);
+                    is_p = &ifs;
+                }
+                string g;
+                while (getline(*is_p, g))
+                {
+                    if (fast5::File::is_valid_file(g))
+                    {
+                        files.push_back(g);
+                        LOG(info) << "adding input file [" << g << "]" << endl;
+                    }
+                }
             }
         }
     }
@@ -178,7 +197,7 @@ void init_reads(const Pore_Model_Dict_Type& models,
     for (const auto& f : files)
     {
         Fast5_Summary_Type s(f, models);
-        LOG("main", info) << "summary: " << s << endl;
+        LOG(info) << "summary: " << s << endl;
         if (s.have_ed_events
             and (s.strand_bounds[1] >= s.strand_bounds[0] + opts::min_read_len
                  or s.strand_bounds[3] >= s.strand_bounds[2] + opts::min_read_len))
@@ -198,7 +217,7 @@ void train_reads(const Pore_Model_Dict_Type& models,
     //
     for (unsigned round = 0; round < 5; ++round)
     {
-        LOG("main", info) << "starting training round [" << round << "]" << endl;
+        LOG(info) << "starting training round [" << round << "]" << endl;
         unsigned crt_idx = 0;
         pfor::pfor< unsigned >(
             opts::num_threads,
@@ -334,7 +353,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                 auto r = alg::mean_stdv_of< float >(
                     read_summary.events[st],
                     [] (const Event_Type& ev) { return ev.mean; });
-                LOG("main", debug)
+                LOG(debug)
                     << "mean_stdv read [" << read_summary.read_id
                     << "] strand [" << st
                     << "] ev_mean=[" << r.first
@@ -347,19 +366,19 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                     Pore_Model_Type pm(models.at(m_name));
                     Pore_Model_Parameters_Type pm_params = read_summary.params[st][m_name];
                     pm.scale(pm_params);
-                    LOG("main", info)
+                    LOG(info)
                         << "basecalling read [" << read_summary.read_id
                         << "] strand [" << st
                         << "] model [" << m_name
                         << "] parameters " << pm_params << endl;
-                    LOG("main", debug)
+                    LOG(debug)
                         << "mean_stdv read [" << read_summary.read_id
                         << "] strand [" << st
                         << "] model_mean [" << pm.mean()
                         << "] model_stdv [" << pm.stdv() << "]" << endl;
                     if (std::abs(r.first - pm.mean()) > 5.0)
                     {
-                        LOG("main", warning)
+                        LOG(warning)
                             << "means_apart read [" << read_summary.read_id
                             << "] strand [" << st
                             << "] model [" << m_name
@@ -375,7 +394,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                 std::sort(results.begin(), results.end());
                 string& best_m_name = get<1>(results.back());
                 string& base_seq = get<2>(results.back());
-                LOG("main", info)
+                LOG(info)
                     << "best_model read [" << read_summary.read_id
                     << "] strand [" << st
                     << "] model [" << best_m_name
@@ -434,8 +453,11 @@ int main(int argc, char * argv[])
 #ifndef H5_HAVE_THREADSAFE
     if (opts::num_threads > 1)
     {
-        LOG("main", warning) << "enabled multi-threading with non-threadsafe HDF5: using experimental locking" << endl;
+        LOG(warning) << "enabled multi-threading with non-threadsafe HDF5: using experimental locking" << endl;
     }
 #endif
+    LOG(info) << "program: " << opts::cmd_parser.getProgramName() << endl;
+    LOG(info) << "version: " << opts::cmd_parser.getVersion() << endl;
+    LOG(info) << "args: " << opts::cmd_parser.getOrigArgv() << endl;
     real_main();
 }
