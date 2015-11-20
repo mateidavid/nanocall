@@ -56,8 +56,9 @@ set(HEADER_SUBDIRS
 #set(CMAKE_FIND_LIBRARY_SUFFIXES .a .so)
 
 # bake-in RPATH to prevent library search problems
-set(CMAKE_INSTALL_RPATH_USE_LINK_PATH true)
-set(CMAKE_BUILD_WITH_INSTALL_RPATH true)
+#set(CMAKE_INSTALL_RPATH_USE_LINK_PATH true)
+#set(CMAKE_BUILD_WITH_INSTALL_RPATH true)
+set(CMAKE_LIBRARY_PATH $ENV{LD_LIBRARY_PATH})
 
 # find zlib
 # => ZLIB_INCLUDE_DIRS, ZLIB_LIBRARIES
@@ -84,7 +85,7 @@ if(BUILD_HDF5)
             INSTALL_COMMAND make install
             )
         set(HDF5_INCLUDE_DIRS ${OPTIONAL_SUBMODULE_PREFIX}/include)
-        set(HDF5_LIBRARIES ${OPTIONAL_SUBMODULE_PREFIX}/lib/libhdf5.a;${CMAKE_DL_LIBS})
+        set(HDF5_LIBRARIES ${OPTIONAL_SUBMODULE_PREFIX}/lib/libhdf5.a)
     elseif(WIN32)
         message(FATAL_ERROR "Building HDF5 not supported on Windows")
     endif()
@@ -92,18 +93,50 @@ else()
     find_package(HDF5 1.8.11 REQUIRED)
 endif()
 
+# Problem:
+#
+# By default, if using target_link_libraries(... ${HDF5_LIBRARIES}), cmake
+# attempts to use the short name "-lhdf5" as an argument to ld, *without* setting
+# "-L" appropriately. It's unclear why, or if this is related to LD_LIBRARY_PATH.
+# The problem arises if an older libhdf5 is found instead. The solution below
+# uses an IMPORTED library. In this case, cmake will use the full path during
+# linking.
+#
+# Also, setting up RPATH apropriately using cmake is... elusive. If baking-in of
+# linker paths is needed, be sure to use LD_RUN_PATH during make- this will be
+# honoured by g++.
+#
+# Refs:
+# https://cmake.org/pipermail/cmake/2013-December/056655.html
+# https://cmake.org/Wiki/CMake/Tutorials/Exporting_and_Importing_Targets
+#
+add_library(libhdf5 UNKNOWN IMPORTED)
+set_property(TARGET libhdf5 PROPERTY IMPORTED_LOCATION ${HDF5_LIBRARIES})
+#get_filename_component(HDF5_LIBRARIES_DIR ${HDF5_LIBRARIES} DIRECTORY)
+#set(CMAKE_INSTALL_RPATH ${HDF5_LIBRARIES_DIR})
+
 message(STATUS "HDF5_INCLUDE_DIRS=${HDF5_INCLUDE_DIRS}")
 message(STATUS "HDF5_LIBRARIES=${HDF5_LIBRARIES}")
+
+# message(STATUS "CMAKE_LIBRARY_PATH=${CMAKE_LIBRARY_PATH}")
+# message(STATUS "CMAKE_SYSTEM_LIBRARY_PATH=${CMAKE_SYSTEM_LIBRARY_PATH}")
+# message(STATUS "CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES=${CMAKE_PLATFORM_IMPLICIT_LINK_DIRECTORIES}")
+# message(STATUS "CMAKE_INSTALL_RPATH=${CMAKE_INSTALL_RPATH}")
+# message(STATUS "CMAKE_INSTALL_RPATH_USE_LINK_PATH=${CMAKE_INSTALL_RPATH_USE_LINK_PATH}")
+# message(STATUS "CMAKE_BUILD_WITH_INSTALL_RPATH=${CMAKE_BUILD_WITH_INSTALL_RPATH}")
+# message(STATUS "CMAKE_SKIP_BUILD_RPATH=${CMAKE_SKIP_BUILD_RPATH}")
 
 ### Prepare default compilation flags
 #
 # headers
 include_directories(SYSTEM
     ${ZLIB_INCLUDE_DIRS}
-    ${HDF5_INCLUDE_DIRS})
+    ${HDF5_INCLUDE_DIRS}
+    )
 include_directories(
     ${PROJECT_BINARY_DIR}
-    ${HEADER_SUBDIRS})
+    ${HEADER_SUBDIRS}
+    )
 get_directory_property(include_directories INCLUDE_DIRECTORIES)
 message(STATUS "INCLUDE_DIRECTORIES='${include_directories}'")
 
@@ -133,7 +166,7 @@ set(CMAKE_CXX_FLAGS_GPROF "-O3 -g3 -pg")
 set(CMAKE_CXX_FLAGS_GPROFREL "-O3 -DNDEBUG -DDISABLE_ASSERTS -pg")
 
 # link flags
-#set(CMAKE_EXE_LINKER_FLAGS "-Wl,-rpath=$ENV{LD_RUN_PATH} -Wl,--as-needed -static-libgcc -static-libstdc++")
+#set(CMAKE_EXE_LINKER_FLAGS "-Wl,-rpath=$ENV{LD_RUN_PATH} -Wl,--as-needed")
 set(CMAKE_EXE_LINKER_FLAGS "-Wl,--as-needed")
 message(STATUS "CMAKE_EXE_LINKER_FLAGS='${CMAKE_EXE_LINKER_FLAGS}'")
 
