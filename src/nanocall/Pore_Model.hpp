@@ -184,7 +184,7 @@ public:
         for (unsigned i = 0; i < n_states; ++i)
         {
             state(i).level_mean = v[4 * i + 0];
-            state(i).level_stdv = v[4 * i + i];
+            state(i).level_stdv = v[4 * i + 1];
             state(i).sd_mean = v[4 * i + 2];
             state(i).sd_stdv = v[4 * i + 3];
             state(i).update_sd_lambda();
