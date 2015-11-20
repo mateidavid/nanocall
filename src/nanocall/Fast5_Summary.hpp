@@ -53,7 +53,7 @@ public:
         file_name = fn;
         auto pos = file_name.find_last_of('/');
         base_file_name = (pos != std::string::npos? file_name.substr(pos + 1) : file_name);
-        strand_bounds = { 0, 0, 0, 0 };
+        strand_bounds = { { 0, 0, 0, 0 } };
         if (base_file_name.substr(base_file_name.size() - 6) == ".fast5")
         {
             base_file_name.resize(base_file_name.size() - 6);
@@ -247,7 +247,7 @@ private:
     // crude detection of strands in event sequence
     void detect_strands()
     {
-        strand_bounds = { 50, static_cast< unsigned >(ed_events.size() - 50), 0, 0 };
+        strand_bounds = { { 50, static_cast< unsigned >(ed_events.size() - 50), 0, 0 } };
         LOG("Fast5_Summary", debug)
             << "num_events=" << ed_events.size()
             << " abasic_level=" << abasic_level << std::endl;
