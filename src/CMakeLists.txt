@@ -173,7 +173,7 @@ message(STATUS "CMAKE_EXE_LINKER_FLAGS='${CMAKE_EXE_LINKER_FLAGS}'")
 ### This target updates the package version
 #
 add_custom_target(package_version
-    ${PROJECT_SOURCE_DIR}/get-dir-version -v -d ${PROJECT_SOURCE_DIR} -o ${PROJECT_BINARY_DIR}/package_version.h -t PACKAGE_VERSION
+    ${PROJECT_SOURCE_DIR}/get-dir-version -v -d ${PROJECT_SOURCE_DIR} -r ${PROJECT_SOURCE_DIR}/.. -o ${PROJECT_BINARY_DIR}/package_version.h -t PACKAGE_VERSION
     )
 
 ### Enable testing targets
