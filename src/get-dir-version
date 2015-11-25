@@ -40,7 +40,7 @@ define_tag="VERSION"
 verbose=
 
 OPTIND=1
-while getopts "d:c:f:o:t:vh" OPT "$@"; do
+while getopts "d:c:f:r:o:t:vh" OPT "$@"; do
     case $OPT in
         d)
             dir=$OPTARG
