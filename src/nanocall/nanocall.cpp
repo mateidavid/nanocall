@@ -1,3 +1,7 @@
+#ifdef WIN32
+#include <iso646.h>
+#endif // WIN32
+
 #include <deque>
 #include <iostream>
 #include <string>
