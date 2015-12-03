@@ -5,7 +5,12 @@
 #include <vector>
 
 #include <sys/types.h>
+
+#ifdef WIN32
+#include "dirent.h"
+#else
 #include <dirent.h>
+#endif // WIN32
 
 // This should work in windows.
 // Ref:
