@@ -9,6 +9,10 @@
 #ifndef __POREMODEL_HPP
 #define __POREMODEL_HPP
 
+#define _USE_MATH_DEFINES
+
+#include <math.h>
+
 #include <cassert>
 #include <cmath>
 #include <iomanip>
