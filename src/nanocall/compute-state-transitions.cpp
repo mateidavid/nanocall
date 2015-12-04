@@ -15,8 +15,8 @@ namespace opts
         "Compute state transition probabilities based on the overlap model, for a given pr_skip and pr_stay.";
     CmdLine cmd_parser(description);
     MultiArg< string > log_level("d", "log-level", "Log level.", false, "string", cmd_parser);
-    ValueArg< float > p_skip("k", "pr-skip", "Pr skip.", true, 0.1, "float", cmd_parser);
-    ValueArg< float > p_stay("t", "pr-stay", "Pr stay.", true, 0.1, "float", cmd_parser);
+    ValueArg< float > p_skip("k", "pr-skip", "Pr skip.", false, 0.1, "float", cmd_parser);
+    ValueArg< float > p_stay("t", "pr-stay", "Pr stay.", false, 0.1, "float", cmd_parser);
     ValueArg< float > p_cutoff("p", "pr-cutoff", "Minimim prob to keep.", false, 0.001, "float", cmd_parser);
     ValueArg< string > output_file_name("o", "output", "Output file name.", false, "", "file", cmd_parser);
 } // namespace opts
