@@ -106,7 +106,7 @@ public:
                         p += (1 - p_stay) * (1 - p_skip) * pow(p_skip, Kmer_Size - k - 1)
                             / (1u << (2 * (Kmer_Size - k)));
                     }
-                p += (1 - p_stay) * pow(p_skip, 4) / n_states;
+                p += (1 - p_stay) * pow(p_skip, 5) / n_states;
                 if (p > p_cutoff)
                 {
                     neighbours(i).to_v.push_back(std::make_pair(j, std::log(p)));
