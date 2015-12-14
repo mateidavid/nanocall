@@ -6,6 +6,7 @@
 #include "State_Transitions.hpp"
 #include "Event.hpp"
 #include "Forward_Backward.hpp"
+#include "Forward_Backward_Custom.hpp"
 #include "logger.hpp"
 #include "zstr.hpp"
 
@@ -23,6 +24,7 @@ namespace opts
     ValueArg< string > st_file_name("s", "state-transitions", "State transitions file name.", true, "", "file", cmd_parser);
     ValueArg< string > ev_file_name("e", "events", "Events file name.", true, "", "file", cmd_parser);
     ValueArg< string > output_file_name("o", "output", "Output file name.", false, "", "file", cmd_parser);
+    SwitchArg custom_fwbw("", "custom-fwbw", "Use custom fwbw.", cmd_parser);
 } // namespace opts
 
 void real_main()
@@ -43,13 +45,23 @@ void real_main()
     }
 
     Forward_Backward<> fwbw;
-    fwbw.fill(pm, st, ev);
+    Forward_Backward_Custom<> fwbw_custom;
+    if (not opts::custom_fwbw)
+    {
+        fwbw.fill(pm, st, ev);
+    }
+    else
+    {
+        fwbw_custom.fill(pm, st, ev);
+    }
 
     // print all kmers with posterior >= .1 for the middle event
     multiset< pair< float, unsigned > > s;
     for (unsigned j = 0; j < pm.n_states; ++j)
     {
-        float v = exp(fwbw.cell(ev.size() / 2, j).gamma);
+        float v = exp(not opts::custom_fwbw
+                      ? fwbw.log_posterior(ev.size() / 2, j)
+                      : fwbw_custom.log_posterior(ev.size() / 2, j));
         if (v >= .1)
         {
             s.insert(make_pair(v, j));

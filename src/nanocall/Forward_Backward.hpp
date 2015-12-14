@@ -23,9 +23,8 @@ public:
 
     struct Matrix_Entry
     {
-        Float_Type alpha; // := Pr[ S_i = j | e_1 ... e_{i-1} ]
-        Float_Type beta;  // := Pr[ S_i = j | e_1 ... e_i ]
-        Float_Type gamma; // := Pr[ S_i = j | e_1 ... e_n ]
+        Float_Type alpha; // := Pr[ E_1 ... E_i, S_i = j ]
+        Float_Type beta;  // := Pr[ E_{i+1} ... E_n | S_i = j ]
     }; // struct Matrix_Entry
 
     static const unsigned n_states = Pore_Model_Type::n_states;
@@ -37,7 +36,9 @@ public:
     // j: state/kmer index
     const Matrix_Entry& cell(unsigned i, unsigned j) const { return _m[i * n_states + j]; }
     Matrix_Entry& cell(unsigned i, unsigned j) { return _m[i * n_states + j]; }
-    Float_Type posterior(unsigned i, unsigned j) { return cell(i, j).gamma; }
+
+    Float_Type log_posterior(unsigned i, unsigned j) const { return cell(i, j).alpha + cell(i, j).beta - _log_pr_data; }
+    Float_Type log_pr_data() const { return _log_pr_data; }
 
     static unsigned& n_threads() { static unsigned _n_threads = 1; return _n_threads; }
 
@@ -49,94 +50,87 @@ public:
         unsigned n_events = ev.size();
         _m.resize(n_states * n_events);
         float log_n_states = std::log(static_cast< float >(n_states));
-        LogSumSet_Type s1(false);
-        LogSumSet_Type s2(false);
+        LogSumSet_Type s(false);
         //
-        // forward: alpha, beta; i == 0
+        // forward: alpha, i == 0
         //
         {
+            unsigned i = 0;
+            LOG("Forward_Backward", debug) << "forward: i=" << i << std::endl;
             for (unsigned j = 0; j < n_states; ++j)
             {
-                // alpha
-                cell(0, j).alpha = - log_n_states;
-                // beta
-                cell(0, j).beta = pm.log_pr_emission(j, ev[0]) + cell(0, j).alpha;
-                s1.add(cell(0, j).beta);
-            }
-            Float_Type denom = s1.val();
-            LOG("Forward_Backward", debug) << "i=0 beta_denom=" << denom << std::endl;
-            for (unsigned j = 0; j < n_states; ++j)
-            {
-                cell(0, j).beta -= denom;
-                LOG("Forward_Backward", debug)
-                    << "i=0 j=" << Kmer_Type::to_string(j)
-                    << " alpha=" << cell(0, j).alpha
-                    << " beta=" << cell(0, j).beta << std::endl;
+                cell(i, j).alpha = pm.log_pr_emission(j, ev[0]) - log_n_states;
+                LOG("Forward_Backward", debug1)
+                    << "i=" << i << " j=" << j << " kmer_j=" << Kmer_Type::to_string(j)
+                    << " alpha=" << cell(i, j).alpha << std::endl;
             }
         }
         //
-        // forward: alpha, beta; i > 0
+        // forward: alpha, i > 0
         //
         for (unsigned i = 1; i < ev.size(); ++i)
         {
-            LOG("Forward_Backward", info) << "forward: i=" << i << std::endl;
-            s1.clear();
-            for (unsigned j = 0; j < n_states; ++j) // TODO: parallelize
+            LOG("Forward_Backward", debug) << "forward: i=" << i << std::endl;
+            for (unsigned j = 0; j < n_states; ++j)
             {
-                // alpha
-                s2.clear();
+                s.clear();
                 for (const auto& p : st.neighbours(j).from_v)
                 {
                     const unsigned& j_prev = p.first;
                     const Float_Type& log_pr_transition = p.second;
-                    s2.add(log_pr_transition + cell(i - 1, j_prev).beta);
+                    s.add(log_pr_transition + cell(i - 1, j_prev).alpha);
                 }
-                cell(i, j).alpha = s2.val();
-                // beta
-                cell(i, j).beta = pm.log_pr_emission(j, ev[i]) + cell(i, j).alpha;
-                s1.add(cell(i, j).beta);
+                cell(i, j).alpha = pm.log_pr_emission(j, ev[i]) + s.val();
+                LOG("Forward_Backward", debug1)
+                    << "i=" << i << " j=" << j << " kmer_j=" << Kmer_Type::to_string(j)
+                    << " alpha=" << cell(i, j).alpha << std::endl;
             }
-            Float_Type denom = s1.val();
-            LOG("Forward_Backward", debug) << "i=" << i << " beta_denom=" << denom << std::endl;
+        }
+        //
+        // backward: beta, i == n-1
+        //
+        {
+            unsigned i = ev.size() - 1;
+            LOG("Forward_Backward", debug) << "backward: i=" << i << std::endl;
             for (unsigned j = 0; j < n_states; ++j)
             {
-                cell(i, j).beta -= denom;
-                LOG("Forward_Backward", debug)
-                    << "i=" << i << " j=" << Kmer_Type::to_string(j)
-                    << " alpha=" << cell(i, j).alpha
+                cell(i, j).beta = 0;
+                LOG("Forward_Backward", debug1)
+                    << "i=" << i << " j=" << j << " kmer_j=" << Kmer_Type::to_string(j)
                     << " beta=" << cell(i, j).beta << std::endl;
             }
         }
         //
-        // backward, gamma; i == n-1
-        //
-        for (unsigned j = 0; j < n_states; ++j)
-        {
-            cell(n_events - 1, j).gamma = cell(n_events - 1, j).beta;
-        }
-        //
-        // backward, gamma; i < n-1
+        // backward: beta, i < n-1
         //
         for (unsigned ip1 = ev.size() - 1; ip1 > 0; --ip1)
         {
             unsigned i = ip1 - 1;
-            LOG("Forward_Backward", info) << "backward: i=" << i << std::endl;
-            for (unsigned j = 0; j < n_states; ++j) // TODO: parallelize
+            LOG("Forward_Backward", debug) << "backward: i=" << i << std::endl;
+            for (unsigned j = 0; j < n_states; ++j)
             {
-                cell(i, j).gamma = cell(i, j).beta;
-                s2.clear();
+                s.clear();
                 for (const auto& p : st.neighbours(j).to_v)
                 {
                     const unsigned& j_next = p.first;
                     const Float_Type& log_pr_transition = p.second;
-                    s2.add(log_pr_transition + cell(ip1, j_next).gamma - cell(ip1, j_next).alpha);
+                    s.add(log_pr_transition + pm.log_pr_emission(j_next, ev[ip1]) + cell(ip1, j_next).beta);
                 }
-                cell(i, j).gamma += s2.val();
-                LOG("Forward_Backward", debug)
-                    << "i=" << i << " j=" << Kmer_Type::to_string(j)
-                    << " gamma=" << cell(i, j).gamma << std::endl;
+                cell(i, j).beta += s.val();
+                LOG("Forward_Backward", debug1)
+                    << "i=" << i << " j=" << j << " kmer_j=" << Kmer_Type::to_string(j)
+                    << " beta=" << cell(i, j).beta << std::endl;
             }
         }
+        //
+        // pr_data
+        //
+        s.clear();
+        for (unsigned j = 0; j < n_states; ++j)
+        {
+            s.add(cell(ev.size() - 1, j).alpha);
+        }
+        _log_pr_data = s.val();
     }
 
     friend std::ostream& operator << (std::ostream& os, const Forward_Backward& fwbw)
@@ -147,8 +141,7 @@ public:
             {
                 os << i << '\t' << j << '\t'
                    << fwbw.cell(i, j).alpha << '\t'
-                   << fwbw.cell(i, j).beta << '\t'
-                   << fwbw.cell(i, j).gamma << std::endl;
+                   << fwbw.cell(i, j).beta << std::endl;
             }
         }
         return os;
@@ -156,6 +149,7 @@ public:
 
 private:
     std::vector< Matrix_Entry > _m;
+    Float_Type _log_pr_data;
 }; // class Forward_Backward
 
 typedef Forward_Backward<> Forward_Backward_Type;
