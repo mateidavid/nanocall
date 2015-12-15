@@ -10,6 +10,7 @@
 #endif
 
 #include "Pore_Model.hpp"
+#include "Forward_Backward.hpp"
 #include "fast5.hpp"
 #include "alg.hpp"
 
@@ -39,15 +40,35 @@ public:
         return _min_read_len;
     }
 
+    static bool& accurate_scaling()
+    {
+        static bool _accurate_scaling = false;
+        return _accurate_scaling;
+    }
+
+    static Float_Type& basic_scale_var()
+    {
+        static Float_Type _basic_scale_var = 1.1;
+        return _basic_scale_var;
+    }
+
+    static Float_Type& accurate_scale_num_events()
+    {
+        static Float_Type _accurate_scale_num_events = 100;
+        return _accurate_scale_num_events;
+    }
+
     // from fast5 file
     std::vector< fast5::EventDetection_Event_Entry > ed_events;
     // filtered
     std::array< Event_Sequence_Type, 2 > events;
 
     Fast5_Summary() : valid(false) {}
-    Fast5_Summary(const std::string fn, const Pore_Model_Dict_Type& models) : valid(false) { summarize(fn, models); }
+    Fast5_Summary(const std::string fn, const Pore_Model_Dict_Type& models,
+                  const State_Transitions_Type& transitions) : valid(false) { summarize(fn, models, transitions); }
 
-    void summarize(const std::string& fn, const Pore_Model_Dict_Type& models)
+    void summarize(const std::string& fn, const Pore_Model_Dict_Type& models,
+                   const State_Transitions_Type& transitions)
     {
         valid = true;
         file_name = fn;
@@ -75,32 +96,9 @@ public:
             abasic_level = detect_abasic_level();
             if (abasic_level > 1.0)
             {
-                // compute initial model scalings
                 detect_strands();
-                load_events();
-                for (unsigned st = 0; st < 2; ++st)
-                {
-                    if (events[st].size() < min_read_len())
-                    {
-                        continue;
-                    }
-                    auto r = alg::mean_stdv_of< Float_Type >(events[st], [] (const Event_Type& ev) { return ev.mean; });
-                    for (const auto& p : models)
-                    {
-                        if (p.second.strand() == st or p.second.strand() == 2)
-                        {
-                            Pore_Model_Parameters_Type param;
-                            param.scale = r.second / p.second.stdv();
-                            param.shift = r.first - param.scale * p.second.mean();
-                            LOG("Fast5_Summary", debug)
-                                << "read [" << read_id << "] strand [" << st
-                                << "] model [" << p.first << "] initial parameters "
-                                << param << std::endl;
-                            params[st][p.first] = std::move(param);
-                        }
-                    }
-                }
-                ed_events.clear();
+                // compute initial model scalings
+                compute_initial_scalings(models, transitions);
             } // if abasic_level > 1.0
         } // if have_ed_events
     }
@@ -358,6 +356,71 @@ private:
         }
         return true;
     } // filter_ed_event()
+
+    void compute_initial_scalings(const Pore_Model_Dict_Type& models, const State_Transitions_Type& transitions)
+    {
+        load_events();
+        for (unsigned st = 0; st < 2; ++st)
+        {
+            if (events[st].size() < min_read_len())
+            {
+                continue;
+            }
+            auto r = alg::mean_stdv_of< Float_Type >(events[st], [] (const Event_Type& ev) { return ev.mean; });
+            Event_Sequence_Type events_prefix;
+            if (accurate_scaling())
+            {
+                events_prefix.assign(events[st].begin(), events[st].begin() + accurate_scale_num_events());
+            }
+            for (const auto& p : models)
+            {
+                if (p.second.strand() == st or p.second.strand() == 2)
+                {
+                    if (accurate_scaling())
+                    {
+                        // try several var values
+                        Float_Type best_log_pr_data = -INFINITY;
+                        Pore_Model_Parameters_Type best_param;
+                        Forward_Backward< Float_Type > fwbw;
+                        for (Float_Type var = 1.0; var < 1.8; var += .1)
+                        {
+                            Pore_Model_Parameters_Type param;
+                            Pore_Model_Type scaled_pm = p.second;
+                            param.var = var;
+                            param.scale = r.second / (p.second.stdv() * param.var);
+                            param.shift = r.first - param.scale * p.second.mean();
+                            scaled_pm.scale(param);
+                            fwbw.clear();
+                            fwbw.fill(scaled_pm, transitions, events_prefix);
+                            LOG("Fast5_Summary", debug)
+                                << "initial_scaling read [" << read_id << "] strand [" << st
+                                << "] model [" << p.first << "] parameters [" << param
+                                << "] score [" << fwbw.log_pr_data() << "]" << std::endl;
+                            if (fwbw.log_pr_data() > best_log_pr_data)
+                            {
+                                best_log_pr_data = fwbw.log_pr_data();
+                                best_param = param;
+                            }
+                        }
+                        params[st][p.first] = std::move(best_param);
+                    }
+                    else
+                    {
+                        // just set var=1.1
+                        Pore_Model_Parameters_Type param;
+                        param.var = basic_scale_var();
+                        param.scale = r.second / (p.second.stdv() * param.var);
+                        param.shift = r.first - param.scale * p.second.mean();
+                        LOG("Fast5_Summary", debug)
+                            << "initial_scaling read [" << read_id << "] strand [" << st
+                            << "] model [" << p.first << "] parameters [" << param << "]" << std::endl;
+                        params[st][p.first] = std::move(param);
+                    }
+                }
+            }
+        }
+        ed_events.clear();
+    } // compute_initial_scalings
 }; // struct Fast5_Summary
 
 typedef Fast5_Summary<> Fast5_Summary_Type;

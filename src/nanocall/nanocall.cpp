@@ -29,6 +29,10 @@ namespace opts
     ValueArg< string > stats_fn("", "stats", "Stats.", false, "", "file", cmd_parser);
     ValueArg< unsigned > min_read_len("", "min-len", "Minimum read length.", false, 1000, "int", cmd_parser);
     ValueArg< unsigned > fasta_line_width("", "fasta-line-width", "Maximum fasta line width.", false, 80, "int", cmd_parser);
+    ValueArg< unsigned > accurate_scale_num_events("", "accurate-scale-num-events", "Number of events used for initial model scaling.", false, 100, "int", cmd_parser);
+    ValueArg< float > basic_scale_var("", "basic-scale-var", "Value of \"var\" used for initial model scaling.", false, 1.1, "float", cmd_parser);
+    SwitchArg scale_only("", "scale-only", "Stop after computing model scalings.", cmd_parser);
+    SwitchArg accurate("", "accurate", "Compute model scalings more accurately.", cmd_parser);
     ValueArg< float > pr_cutoff("", "pr-cutoff", "Minimum value for transition probabilities; smaller values are set to zero.", false, .001, "float", cmd_parser);
     ValueArg< float > pr_skip("", "pr-skip", "Transition probability of skipping at least 1 state.", false, .1, "float", cmd_parser);
     ValueArg< float > pr_stay("", "pr-stay", "Transition probability of staying in the same state.", false, .1, "float", cmd_parser);
@@ -196,12 +200,13 @@ void init_files(list< string >& files)
 } // init_files
 
 void init_reads(const Pore_Model_Dict_Type& models,
+                const State_Transitions_Type& transitions,
                 const list< string >& files,
                 deque< Fast5_Summary_Type >& reads)
 {
     for (const auto& f : files)
     {
-        Fast5_Summary_Type s(f, models);
+        Fast5_Summary_Type s(f, models, transitions);
         LOG(info) << "summary: " << s << endl;
         if (s.have_ed_events
             and (s.strand_bounds[1] >= s.strand_bounds[0] + opts::min_read_len
@@ -432,11 +437,14 @@ void real_main()
     init_models(models);
     init_transitions(transitions);
     init_files(files);
-    init_reads(models, files, reads);
+    init_reads(models, transitions, files, reads);
     // do some training
     train_reads(models, transitions, reads);
     // basecall reads
-    basecall_reads(models, transitions, reads);
+    if (not opts::scale_only)
+    {
+        basecall_reads(models, transitions, reads);
+    }
     // print stats
     if (not opts::stats_fn.get().empty())
     {
@@ -455,6 +463,9 @@ int main(int argc, char * argv[])
     logger::Logger::set_default_level(logger::level::info);
     logger::Logger::set_levels_from_options(opts::log_level);
     Fast5_Summary_Type::min_read_len() = opts::min_read_len;
+    Fast5_Summary_Type::accurate_scaling() = opts::accurate;
+    Fast5_Summary_Type::basic_scale_var() = opts::basic_scale_var;
+    Fast5_Summary_Type::accurate_scale_num_events() = opts::accurate_scale_num_events;
 #ifndef H5_HAVE_THREADSAFE
     if (opts::num_threads > 1)
     {
