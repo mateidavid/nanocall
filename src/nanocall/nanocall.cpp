@@ -29,10 +29,11 @@ namespace opts
     ValueArg< string > stats_fn("", "stats", "Stats.", false, "", "file", cmd_parser);
     ValueArg< unsigned > min_read_len("", "min-len", "Minimum read length.", false, 1000, "int", cmd_parser);
     ValueArg< unsigned > fasta_line_width("", "fasta-line-width", "Maximum fasta line width.", false, 80, "int", cmd_parser);
+    ValueArg< float > accurate_scale_shift_step("", "accurate-scale-shift-step", "Step size for \"shift\" scaling.", false, 3.0, "float", cmd_parser);
+    ValueArg< unsigned > accurate_scale_num_shift_steps("", "accurate-scale-num-shift-steps", "Number of steps for \"shift\" scaling.", false, 7, "int", cmd_parser);
     ValueArg< unsigned > accurate_scale_num_events("", "accurate-scale-num-events", "Number of events used for initial model scaling.", false, 100, "int", cmd_parser);
-    ValueArg< float > basic_scale_var("", "basic-scale-var", "Value of \"var\" used for initial model scaling.", false, 1.1, "float", cmd_parser);
     SwitchArg scale_only("", "scale-only", "Stop after computing model scalings.", cmd_parser);
-    SwitchArg accurate("", "accurate", "Compute model scalings more accurately.", cmd_parser);
+    SwitchArg accurate_scaling("", "accurate", "Compute model scalings more accurately.", cmd_parser);
     ValueArg< float > pr_cutoff("", "pr-cutoff", "Minimum value for transition probabilities; smaller values are set to zero.", false, .001, "float", cmd_parser);
     ValueArg< float > pr_skip("", "pr-skip", "Transition probability of skipping at least 1 state.", false, .1, "float", cmd_parser);
     ValueArg< float > pr_stay("", "pr-stay", "Transition probability of staying in the same state.", false, .1, "float", cmd_parser);
@@ -200,13 +201,12 @@ void init_files(list< string >& files)
 } // init_files
 
 void init_reads(const Pore_Model_Dict_Type& models,
-                const State_Transitions_Type& transitions,
                 const list< string >& files,
                 deque< Fast5_Summary_Type >& reads)
 {
     for (const auto& f : files)
     {
-        Fast5_Summary_Type s(f, models, transitions);
+        Fast5_Summary_Type s(f, models);
         LOG(info) << "summary: " << s << endl;
         if (s.have_ed_events
             and (s.strand_bounds[1] >= s.strand_bounds[0] + opts::min_read_len
@@ -221,81 +221,90 @@ void train_reads(const Pore_Model_Dict_Type& models,
                  State_Transitions_Type& transitions,
                  deque< Fast5_Summary_Type >& reads)
 {
-    return;
-    //
-    // this is only a stub
-    //
-    for (unsigned round = 0; round < 5; ++round)
-    {
-        LOG(info) << "starting training round [" << round << "]" << endl;
-        unsigned crt_idx = 0;
-        pfor::pfor< unsigned >(
-            opts::num_threads,
-            10,
-            // get_item
-            [&] (unsigned& i) {
-                if (crt_idx >= reads.size()) return false;
-                i = crt_idx++;
-                return true;
-            },
-            // process item
-            [&] (unsigned& i) {
-                Fast5_Summary_Type& read_summary = reads[i];
-                read_summary.load_events();
+    unsigned crt_idx = 0;
+    pfor::pfor< unsigned >(
+        opts::num_threads,
+        10,
+        // get_item
+        [&] (unsigned& i) {
+            if (crt_idx >= reads.size()) return false;
+            i = crt_idx++;
+            return true;
+        },
+        // process item
+        [&] (unsigned& i) {
+            Fast5_Summary_Type& read_summary = reads[i];
+            read_summary.load_events();
 
-                for (unsigned st = 0; st < 2; ++st)
+            for (unsigned st = 0; st < 2; ++st)
+            {
+                // if not enough events, ignore strand
+                if (read_summary.events[st].size() < opts::min_read_len) continue;
+                // create list of models to try
+                list< string > model_list;
+                if (models.count(read_summary.preferred_model[st]))
                 {
-                    // if not enough events, ignore strand
-                    if (read_summary.events[st].size() < opts::min_read_len) continue;
-                    // create list of models to try
-                    list< string > model_sublist;
-                    if (models.count(read_summary.preferred_model[st]))
+                    // if we have a preferred model, use that
+                    model_list.push_back(read_summary.preferred_model[st]);
+                }
+                else
+                {
+                    // no preferred model, try all that apply to this strand
+                    for (const auto& p : models)
                     {
-                        // if we have a preferred model, use that
-                        model_sublist.push_back(read_summary.preferred_model[st]);
-                    }
-                    else
-                    {
-                        // no preferred model, try all that apply to this strand
-                        for (const auto& p : models)
+                        if (p.second.strand() == st or p.second.strand() == 2)
                         {
-                            if (p.second.strand() == st or p.second.strand() == 2)
-                            {
-                                model_sublist.push_back(p.first);
-                            }
+                            model_list.push_back(p.first);
                         }
                     }
-                    assert(not model_sublist.empty());
-                    // run fwbw
-                    map< string, Forward_Backward_Type > results;
-                    for (const auto& m_name : model_sublist)
+                }
+                assert(not model_list.empty());
+                // make list of events on which to train
+                Event_Sequence_Type train_events(
+                    read_summary.events[st].begin(),
+                    read_summary.events[st].begin()
+                    + std::min((size_t)opts::accurate_scale_num_events.get(), read_summary.events[st].size()));
+                for (const auto& m_name : model_list)
+                {
+                    //
+                    // try several values for shift, evenly spaced around the start point
+                    //
+                    float orig_shift = read_summary.params[st][m_name].shift;
+                    float shift_step = opts::accurate_scale_shift_step;
+                    unsigned num_shift_steps = opts::accurate_scale_num_shift_steps;
+                    float min_shift = orig_shift - shift_step * (unsigned)(num_shift_steps / 2);
+                    float best_log_pr_data = -INFINITY;
+                    Pore_Model_Parameters_Type best_params;
+                    for (unsigned k = 0; k < num_shift_steps; ++k)
                     {
-                        // scale model using current parameters, initialize them if necessary
                         Pore_Model_Type pm(models.at(m_name));
                         Pore_Model_Parameters_Type pm_params = read_summary.params[st][m_name];
+                        pm_params.shift = min_shift + shift_step * k;
                         pm.scale(pm_params);
-                        // main work: fill matrix
-                        results[m_name].fill(pm, transitions, read_summary.events[st]);
+                        Forward_Backward_Type fwbw;
+                        fwbw.fill(pm, transitions, train_events);
+                        LOG(debug)
+                            << "accurate_scaling read [" << read_summary.read_id
+                            << "] strand [" << st
+                            << "] model [" << m_name
+                            << "] parameters [" << pm_params
+                            << "] log_pr_data [" << fwbw.log_pr_data() << "]" << std::endl;
+                        if (fwbw.log_pr_data() > best_log_pr_data)
+                        {
+                            best_log_pr_data = fwbw.log_pr_data();
+                            best_params = pm_params;
+                        }
                     }
-                    //
-                    // use fwbw results to update parameters
-                    // ...
-                    //
-                }
-                read_summary.drop_events();
-            },
-            // progress_report
-            [&] (unsigned items, unsigned seconds) {
-                clog << "Processed " << setw(6) << right << items << " reads in "
-                     << setw(6) << right << seconds << " seconds\r";
-            }); // pfor
-
-        //
-        // update state_transitions
-        // ...
-        //
-
-    } // for round
+                    read_summary.params[st][m_name] = std::move(best_params);
+                } // for m_name
+            } // for st
+            read_summary.drop_events();
+        },
+        // progress_report
+        [&] (unsigned items, unsigned seconds) {
+            clog << "Processed " << setw(6) << right << items << " reads in "
+                 << setw(6) << right << seconds << " seconds\r";
+        }); // pfor
 } // train_reads
 
 void write_fasta(ostream& os, const string& name, const string& seq)
@@ -427,7 +436,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
         }); // pfor
 } // basecall_reads
 
-void real_main()
+int real_main()
 {
     Pore_Model_Dict_Type models;
     State_Transitions_Type transitions;
@@ -437,12 +446,15 @@ void real_main()
     init_models(models);
     init_transitions(transitions);
     init_files(files);
-    init_reads(models, transitions, files, reads);
-    // do some training
-    train_reads(models, transitions, reads);
-    // basecall reads
+    init_reads(models, files, reads);
+    if (opts::accurate_scaling)
+    {
+        // do some training
+        train_reads(models, transitions, reads);
+    }
     if (not opts::scale_only)
     {
+        // basecall reads
         basecall_reads(models, transitions, reads);
     }
     // print stats
@@ -455,6 +467,7 @@ void real_main()
             ofs << endl;
         }
     }
+    return EXIT_SUCCESS;
 }
 
 int main(int argc, char * argv[])
@@ -463,9 +476,6 @@ int main(int argc, char * argv[])
     logger::Logger::set_default_level(logger::level::info);
     logger::Logger::set_levels_from_options(opts::log_level);
     Fast5_Summary_Type::min_read_len() = opts::min_read_len;
-    Fast5_Summary_Type::accurate_scaling() = opts::accurate;
-    Fast5_Summary_Type::basic_scale_var() = opts::basic_scale_var;
-    Fast5_Summary_Type::accurate_scale_num_events() = opts::accurate_scale_num_events;
 #ifndef H5_HAVE_THREADSAFE
     if (opts::num_threads > 1)
     {
@@ -475,5 +485,5 @@ int main(int argc, char * argv[])
     LOG(info) << "program: " << opts::cmd_parser.getProgramName() << endl;
     LOG(info) << "version: " << opts::cmd_parser.getVersion() << endl;
     LOG(info) << "args: " << opts::cmd_parser.getOrigArgv() << endl;
-    real_main();
+    return real_main();
 }
