@@ -65,11 +65,11 @@ public:
                 s1.add(cell(0, j).beta);
             }
             Float_Type denom = s1.val();
-            LOG("Forward_Backward_Custom", debug) << "i=0 beta_denom=" << denom << std::endl;
+            LOG("Forward_Backward_Custom", debug1) << "i=0 beta_denom=" << denom << std::endl;
             for (unsigned j = 0; j < n_states; ++j)
             {
                 cell(0, j).beta -= denom;
-                LOG("Forward_Backward_Custom", debug1)
+                LOG("Forward_Backward_Custom", debug2)
                     << "i=0 j=" << Kmer_Type::to_string(j)
                     << " alpha=" << cell(0, j).alpha
                     << " beta=" << cell(0, j).beta << std::endl;
@@ -80,7 +80,7 @@ public:
         //
         for (unsigned i = 1; i < ev.size(); ++i)
         {
-            LOG("Forward_Backward_Custom", debug) << "forward: i=" << i << std::endl;
+            LOG("Forward_Backward_Custom", debug1) << "forward: i=" << i << std::endl;
             s1.clear();
             for (unsigned j = 0; j < n_states; ++j) // TODO: parallelize
             {
@@ -98,11 +98,11 @@ public:
                 s1.add(cell(i, j).beta);
             }
             Float_Type denom = s1.val();
-            LOG("Forward_Backward_Custom", debug) << "i=" << i << " beta_denom=" << denom << std::endl;
+            LOG("Forward_Backward_Custom", debug1) << "i=" << i << " beta_denom=" << denom << std::endl;
             for (unsigned j = 0; j < n_states; ++j)
             {
                 cell(i, j).beta -= denom;
-                LOG("Forward_Backward_Custom", debug1)
+                LOG("Forward_Backward_Custom", debug2)
                     << "i=" << i << " j=" << Kmer_Type::to_string(j)
                     << " alpha=" << cell(i, j).alpha
                     << " beta=" << cell(i, j).beta << std::endl;
@@ -121,7 +121,7 @@ public:
         for (unsigned ip1 = ev.size() - 1; ip1 > 0; --ip1)
         {
             unsigned i = ip1 - 1;
-            LOG("Forward_Backward_Custom", debug) << "backward: i=" << i << std::endl;
+            LOG("Forward_Backward_Custom", debug1) << "backward: i=" << i << std::endl;
             for (unsigned j = 0; j < n_states; ++j) // TODO: parallelize
             {
                 cell(i, j).gamma = cell(i, j).beta;
@@ -133,7 +133,7 @@ public:
                     s2.add(log_pr_transition + cell(ip1, j_next).gamma - cell(ip1, j_next).alpha);
                 }
                 cell(i, j).gamma += s2.val();
-                LOG("Forward_Backward_Custom", debug1)
+                LOG("Forward_Backward_Custom", debug2)
                     << "i=" << i << " j=" << Kmer_Type::to_string(j)
                     << " gamma=" << cell(i, j).gamma << std::endl;
             }

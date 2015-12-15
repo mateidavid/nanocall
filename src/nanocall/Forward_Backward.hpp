@@ -56,11 +56,11 @@ public:
         //
         {
             unsigned i = 0;
-            LOG("Forward_Backward", debug) << "forward: i=" << i << std::endl;
+            LOG("Forward_Backward", debug1) << "forward: i=" << i << std::endl;
             for (unsigned j = 0; j < n_states; ++j)
             {
                 cell(i, j).alpha = pm.log_pr_emission(j, ev[0]) - log_n_states;
-                LOG("Forward_Backward", debug1)
+                LOG("Forward_Backward", debug2)
                     << "i=" << i << " j=" << j << " kmer_j=" << Kmer_Type::to_string(j)
                     << " alpha=" << cell(i, j).alpha << std::endl;
             }
@@ -70,7 +70,7 @@ public:
         //
         for (unsigned i = 1; i < ev.size(); ++i)
         {
-            LOG("Forward_Backward", debug) << "forward: i=" << i << std::endl;
+            LOG("Forward_Backward", debug1) << "forward: i=" << i << std::endl;
             for (unsigned j = 0; j < n_states; ++j)
             {
                 s.clear();
@@ -81,7 +81,7 @@ public:
                     s.add(log_pr_transition + cell(i - 1, j_prev).alpha);
                 }
                 cell(i, j).alpha = pm.log_pr_emission(j, ev[i]) + s.val();
-                LOG("Forward_Backward", debug1)
+                LOG("Forward_Backward", debug2)
                     << "i=" << i << " j=" << j << " kmer_j=" << Kmer_Type::to_string(j)
                     << " alpha=" << cell(i, j).alpha << std::endl;
             }
@@ -91,11 +91,11 @@ public:
         //
         {
             unsigned i = ev.size() - 1;
-            LOG("Forward_Backward", debug) << "backward: i=" << i << std::endl;
+            LOG("Forward_Backward", debug1) << "backward: i=" << i << std::endl;
             for (unsigned j = 0; j < n_states; ++j)
             {
                 cell(i, j).beta = 0;
-                LOG("Forward_Backward", debug1)
+                LOG("Forward_Backward", debug2)
                     << "i=" << i << " j=" << j << " kmer_j=" << Kmer_Type::to_string(j)
                     << " beta=" << cell(i, j).beta << std::endl;
             }
@@ -106,7 +106,7 @@ public:
         for (unsigned ip1 = ev.size() - 1; ip1 > 0; --ip1)
         {
             unsigned i = ip1 - 1;
-            LOG("Forward_Backward", debug) << "backward: i=" << i << std::endl;
+            LOG("Forward_Backward", debug1) << "backward: i=" << i << std::endl;
             for (unsigned j = 0; j < n_states; ++j)
             {
                 s.clear();
@@ -117,7 +117,7 @@ public:
                     s.add(log_pr_transition + pm.log_pr_emission(j_next, ev[ip1]) + cell(ip1, j_next).beta);
                 }
                 cell(i, j).beta += s.val();
-                LOG("Forward_Backward", debug1)
+                LOG("Forward_Backward", debug2)
                     << "i=" << i << " j=" << j << " kmer_j=" << Kmer_Type::to_string(j)
                     << " beta=" << cell(i, j).beta << std::endl;
             }
