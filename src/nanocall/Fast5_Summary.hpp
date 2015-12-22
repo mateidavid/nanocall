@@ -28,6 +28,7 @@ public:
     std::array< std::string, 2 > preferred_model;
     std::array< std::map< std::string, Pore_Model_Parameters_Type >, 2 > params;
     std::array< unsigned, 4 > strand_bounds;
+    std::array< Float_Type, 2 > time_length;
     unsigned num_ed_events;
     float sampling_rate;
     float abasic_level;
@@ -54,7 +55,8 @@ public:
         file_name = fn;
         auto pos = file_name.find_last_of('/');
         base_file_name = (pos != std::string::npos? file_name.substr(pos + 1) : file_name);
-        strand_bounds = { { 0, 0, 0, 0 } };
+        strand_bounds = {{ 0, 0, 0, 0 }};
+        time_length = {{ 0.0, 0.0 }};
         if (base_file_name.substr(base_file_name.size() - 6) == ".fast5")
         {
             base_file_name.resize(base_file_name.size() - 6);
@@ -110,6 +112,7 @@ public:
                             params[st][p.first] = std::move(param);
                         }
                     }
+                    time_length[st] = events[st].rbegin()->start + events[st].rbegin()->length;
                 }
                 ed_events.clear();
             } // if abasic_level > 1.0
@@ -171,7 +174,8 @@ public:
                    << " strand_bounds=[" << fs.strand_bounds[0] << ","
                    << fs.strand_bounds[1] << ","
                    << fs.strand_bounds[2] << ","
-                   << fs.strand_bounds[3] << "]";
+                   << fs.strand_bounds[3]
+                   << "] time_length=[" << fs.time_length[0] << "," << fs.time_length[1] << "]";
             }
         }
         os << "]";
