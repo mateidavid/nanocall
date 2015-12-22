@@ -1,0 +1,1 @@
+#define PACKAGE_VERSION "v0.2.4-7-g50b2692"
