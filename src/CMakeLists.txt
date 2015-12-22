@@ -15,7 +15,11 @@ endif()
 # general cmake settings
 cmake_minimum_required(VERSION 2.8.12)
 project(NANOCALL C CXX)
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
+
+if (UNIX)
+    set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake")
+endif()
+
 include(CheckLibraryExists)
 include(CheckIncludeFileCXX)
 include(ExternalProject)
@@ -62,7 +66,9 @@ set(CMAKE_LIBRARY_PATH $ENV{LD_LIBRARY_PATH})
 
 # find zlib
 # => ZLIB_INCLUDE_DIRS, ZLIB_LIBRARIES
-find_package(ZLIB REQUIRED)
+if(UNIX)
+    find_package(ZLIB REQUIRED)
+endif()
 
 # find HDF5
 # => HDF5_INCLUDE_DIRS, HDF5_LIBRARIES
@@ -142,39 +148,49 @@ message(STATUS "INCLUDE_DIRECTORIES='${include_directories}'")
 
 ### general compile flags
 #
-set(EXTRA_FLAGS "-std=c++11 -pthread -Wall -Wextra -pedantic")
+if(UNIX)
+    set(EXTRA_FLAGS "-std=c++11 -pthread -Wall -Wextra -pedantic")
 
-# compiler-specific flags
-if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
-    set(EXTRA_FLAGS "${EXTRA_FLAGS} -fmax-errors=1")
-elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
-    set(EXTRA_FLAGS "${EXTRA_FLAGS} -ferror-limit=1")
+    # compiler-specific flags
+    if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
+        set(EXTRA_FLAGS "${EXTRA_FLAGS} -fmax-errors=1")
+    elseif ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "Clang")
+        set(EXTRA_FLAGS "${EXTRA_FLAGS} -ferror-limit=1")
+    endif()
+
+    # consolidate compile flags
+    set(CMAKE_CXX_FLAGS "$ENV{CXXFLAGS} ${EXTRA_FLAGS}")
+    message(STATUS "CMAKE_CXX_FLAGS='${CMAKE_CXX_FLAGS}'")
+
+    ### build-specific compile flags
+
+    set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g3 -ggdb -fno-inline -fno-eliminate-unused-debug-types")
+    set(CMAKE_CXX_FLAGS_TEST "-O3 -g3 -fno-eliminate-unused-debug-types")
+    set(CMAKE_CXX_FLAGS_TEST_O2 "-O2 -g3 -fno-eliminate-unused-debug-types")
+    set(CMAKE_CXX_FLAGS_TEST_O1 "-O1 -g3 -fno-eliminate-unused-debug-types")
+    set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -DDISABLE_ASSERTS")
+    set(CMAKE_CXX_FLAGS_GPROF "-O3 -g3 -pg")
+    set(CMAKE_CXX_FLAGS_GPROFREL "-O3 -DNDEBUG -DDISABLE_ASSERTS -pg")
 endif()
-
-# consolidate compile flags
-set(CMAKE_CXX_FLAGS "$ENV{CXXFLAGS} ${EXTRA_FLAGS}")
-message(STATUS "CMAKE_CXX_FLAGS='${CMAKE_CXX_FLAGS}'")
-
-### build-specific compile flags
-
-set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g3 -ggdb -fno-inline -fno-eliminate-unused-debug-types")
-set(CMAKE_CXX_FLAGS_TEST "-O3 -g3 -fno-eliminate-unused-debug-types")
-set(CMAKE_CXX_FLAGS_TEST_O2 "-O2 -g3 -fno-eliminate-unused-debug-types")
-set(CMAKE_CXX_FLAGS_TEST_O1 "-O1 -g3 -fno-eliminate-unused-debug-types")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -DDISABLE_ASSERTS")
-set(CMAKE_CXX_FLAGS_GPROF "-O3 -g3 -pg")
-set(CMAKE_CXX_FLAGS_GPROFREL "-O3 -DNDEBUG -DDISABLE_ASSERTS -pg")
 
 # link flags
 #set(CMAKE_EXE_LINKER_FLAGS "-Wl,-rpath=$ENV{LD_RUN_PATH} -Wl,--as-needed")
-set(CMAKE_EXE_LINKER_FLAGS "-Wl,--as-needed")
-message(STATUS "CMAKE_EXE_LINKER_FLAGS='${CMAKE_EXE_LINKER_FLAGS}'")
+if (UNIX)
+    set(CMAKE_EXE_LINKER_FLAGS "-Wl,--as-needed")
+    message(STATUS "CMAKE_EXE_LINKER_FLAGS='${CMAKE_EXE_LINKER_FLAGS}'")
+endif()
 
 ### This target updates the package version
 #
-add_custom_target(package_version
-    ${PROJECT_SOURCE_DIR}/get-dir-version -v -d ${PROJECT_SOURCE_DIR} -r ${PROJECT_SOURCE_DIR}/.. -o ${PROJECT_BINARY_DIR}/package_version.h -t PACKAGE_VERSION
-    )
+if (WIN32)
+    add_custom_target(package_version
+        ${PROJECT_SOURCE_DIR}/get-dir-version-win32 "${PROJECT_BINARY_DIR}/package_version.h"
+        )
+else()
+    add_custom_target(package_version
+        ${PROJECT_SOURCE_DIR}/get-dir-version -v -d ${PROJECT_SOURCE_DIR} -r ${PROJECT_SOURCE_DIR}/.. -o ${PROJECT_BINARY_DIR}/package_version.h -t PACKAGE_VERSION
+        )
+endif()
 
 ### Enable testing targets
 #enable_testing()
