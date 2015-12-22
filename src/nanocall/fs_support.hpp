@@ -7,7 +7,7 @@
 #include <sys/types.h>
 
 #ifdef WIN32
-#include "dirent.h"
+#include "dirent_win.h"
 #else
 #include <dirent.h>
 #endif // WIN32

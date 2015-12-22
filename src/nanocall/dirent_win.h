@@ -7,8 +7,8 @@
  * under the MIT license.  For all details and documentation, see
  * https://github.com/tronkko/dirent
  */
-#ifndef DIRENT_H
-#define DIRENT_H
+#ifndef DIRENT_WIN32_H
+#define DIRENT_WIN32_H
 
 /*
  * Define architecture flags so we don't need to include windows.h.
@@ -913,5 +913,5 @@ dirent_set_errno(
 #ifdef __cplusplus
 }
 #endif
-#endif /*DIRENT_H*/
+#endif /*DIRENT_WIN32_H*/
 
