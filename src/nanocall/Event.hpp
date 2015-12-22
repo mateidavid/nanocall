@@ -47,7 +47,20 @@ public:
 }; // class Event
 
 template < typename Float_Type = float >
-using Event_Sequence = std::vector< Event< Float_Type > >;
+struct Event_Sequence
+    : std::vector< Event< Float_Type > >
+{
+    typedef std::vector< Event< Float_Type > > Base;
+    using Base::Base;
+    void apply_drift_correction(Float_Type drift)
+    {
+        for (auto& e : *this)
+        {
+            e.mean -= drift * e.start;
+            e.update_logs();
+        }
+    }
+}; // struct Event_Sequence
 
 typedef Event<> Event_Type;
 typedef Event_Sequence<> Event_Sequence_Type;

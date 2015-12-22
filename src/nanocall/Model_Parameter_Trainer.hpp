@@ -17,13 +17,14 @@ struct Model_Parameter_Trainer
     typedef Pore_Model< Float_Type, Kmer_Size > Pore_Model_Type;
     typedef State_Transitions< Float_Type, Kmer_Size > State_Transitions_Type;
     typedef Event< Float_Type > Event_Type;
+    typedef Event_Sequence< Float_Type > Event_Sequence_Type;
     typedef Forward_Backward< Float_Type, Kmer_Size > Forward_Backward_Type;
     typedef logsum::logsumset< Float_Type > LogSumSet_Type;
 
     static void train_one_round(
         const Pore_Model_Type& pm,
         const State_Transitions_Type& transitions,
-        const std::vector< Event_Type >& events,
+        const Event_Sequence_Type& events,
         const Pore_Model_Parameters_Type& crt_pm_params,
         Pore_Model_Parameters_Type& new_pm_params,
         Float_Type& new_fit,
@@ -34,12 +35,8 @@ struct Model_Parameter_Trainer
         // apply current scaling parameters, drift correction, and run fwbw
         Pore_Model_Type scaled_pm(pm);
         scaled_pm.scale(crt_pm_params);
-        std::vector< Event_Type > corrected_events(events);
-        for (auto& e : corrected_events)
-        {
-            e.mean -= crt_pm_params.drift * e.start;
-            e.update_logs();
-        }
+        Event_Sequence_Type corrected_events(events);
+        corrected_events.apply_drift_correction(crt_pm_params.drift);
         Forward_Backward_Type fwbw;
         fwbw.fill(scaled_pm, transitions, corrected_events);
         new_fit = fwbw.log_pr_data();

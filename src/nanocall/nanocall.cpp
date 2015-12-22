@@ -438,8 +438,11 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                             << "] events_mean=[" << r.first
                             << "]" << endl;
                     }
+                    // correct drift
+                    Event_Sequence_Type corrected_events = read_summary.events[st];
+                    corrected_events.apply_drift_correction(pm_params.drift);
                     Viterbi_Type vit;
-                    vit.fill(pm, transitions, read_summary.events.at(st));
+                    vit.fill(pm, transitions, corrected_events);
                     results.emplace_back(make_tuple(vit.path_probability(), m_name, vit.base_seq()));
                 }
                 std::sort(results.begin(), results.end());
