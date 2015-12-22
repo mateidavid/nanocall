@@ -29,6 +29,7 @@ public:
     std::array< std::map< std::string, Pore_Model_Parameters_Type >, 2 > params;
     std::array< unsigned, 4 > strand_bounds;
     unsigned num_ed_events;
+    float sampling_rate;
     float abasic_level;
     bool have_ed_events;
     bool valid;
@@ -59,6 +60,15 @@ public:
             base_file_name.resize(base_file_name.size() - 6);
         }
         fast5::File f(file_name);
+        if (f.have_sampling_rate())
+        {
+            sampling_rate = f.get_sampling_rate();
+        }
+        else
+        {
+            LOG(warning) << fn << ": missing sampling rate; assuming 5000.0" << std::endl;
+            sampling_rate = 5000.0;
+        }
         have_ed_events = f.have_eventdetection_events();
         num_ed_events = 0;
         abasic_level = 0.0;
@@ -130,8 +140,8 @@ public:
                     Event_Type e;
                     e.mean = ed_events[j].mean;
                     e.stdv = ed_events[j].stdv;
-                    e.start = 0.0;
-                    e.length = 0.0;
+                    e.start = (ed_events[j].start - ed_events[strand_bounds[2 * st + 0]].start) / sampling_rate;
+                    e.length = ed_events[j].length / sampling_rate;
                     e.update_logs();
                     events[st].push_back(e);
                 }
