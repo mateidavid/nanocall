@@ -87,6 +87,8 @@ struct Pore_Model_State
     Float_Type sd_mean;
     Float_Type sd_stdv;
     Float_Type sd_lambda;
+
+    Float_Type log_level_mean;
     Float_Type log_level_stdv;
     Float_Type log_sd_stdv;
     Float_Type log_sd_lambda;
@@ -111,6 +113,7 @@ struct Pore_Model_State
     // update logs
     void update_logs()
     {
+        log_level_mean = std::log(level_mean);
         log_level_stdv = std::log(level_stdv);
         log_sd_lambda = std::log(sd_lambda);
     }

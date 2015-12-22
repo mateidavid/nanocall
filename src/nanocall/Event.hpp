@@ -16,10 +16,17 @@ class Event
 public:
     Float_Type mean;
     Float_Type stdv;
-    Float_Type log_stdv;
     Float_Type start;
     Float_Type length;
-    void update_logs() { log_stdv = std::log(stdv); }
+    Float_Type log_mean;
+    Float_Type log_stdv;
+    Float_Type log_start;
+    void update_logs()
+    {
+        log_mean = std::log(mean);
+        log_stdv = std::log(stdv);
+        log_start = std::log(start);
+    }
     friend std::ostream & operator << (std::ostream& os, const Event< Float_Type >& ev)
     {
         os << ev.mean << '\t'
