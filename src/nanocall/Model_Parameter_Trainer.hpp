@@ -24,22 +24,28 @@ struct Model_Parameter_Trainer
     static void train_one_round(
         const Pore_Model_Type& pm,
         const State_Transitions_Type& transitions,
-        const Event_Sequence_Type& events,
+        const std::vector< Event_Sequence_Type >& event_seqs,
         const Pore_Model_Parameters_Type& crt_pm_params,
         Pore_Model_Parameters_Type& new_pm_params,
         Float_Type& new_fit,
         bool& done)
     {
-        unsigned n_events = events.size();
+        unsigned n_event_seqs = event_seqs.size();
+        unsigned total_num_events = alg::accumulate(
+            event_seqs, 0u, [] (unsigned s, const Event_Sequence_Type& events) { return s + events.size(); });
         done = false;
         // apply current scaling parameters, drift correction, and run fwbw
         Pore_Model_Type scaled_pm(pm);
         scaled_pm.scale(crt_pm_params);
-        Event_Sequence_Type corrected_events(events);
-        corrected_events.apply_drift_correction(crt_pm_params.drift);
-        Forward_Backward_Type fwbw;
-        fwbw.fill(scaled_pm, transitions, corrected_events);
-        new_fit = fwbw.log_pr_data();
+        std::vector< Event_Sequence_Type > corrected_event_seqs(event_seqs);
+        std::vector< Forward_Backward_Type > fwbw(n_event_seqs);
+        new_fit = 0;
+        for (unsigned k = 0; k < n_event_seqs; ++k)
+        {
+            corrected_event_seqs.at(k).apply_drift_correction(crt_pm_params.drift);
+            fwbw.at(k).fill(scaled_pm, transitions, corrected_event_seqs.at(k));
+            new_fit += fwbw.at(k).log_pr_data();
+        }
         // compute the scaling matrices (first in logspace)
         // against unscaled pm & uncorrected events
         std::array< std::array< LogSumSet_Type, 3 >, 3 > A_lss =
@@ -47,36 +53,40 @@ struct Model_Parameter_Trainer
                {{ false, false, false }},
                {{ false, false, false }} }};
         std::array< LogSumSet_Type, 3 > B_lss = {{ false, false, false }};
-        for (unsigned i = 0; i < n_events; ++i)
+        for (unsigned k = 0; k < n_event_seqs; ++k)
         {
-            Float_Type log_x_i = events[i].log_mean;
-            Float_Type log_t_i = events[i].log_start;
-            LOG(debug1)
-                << "outter_loop i=" << i
-                << " log_x_i=" << log_x_i
-                << " log_t_i=" << log_t_i << std::endl;
-            std::array< LogSumSet_Type, 3 > s_lss = {{ false, false, false }};
-            for (unsigned j = 0; j < Pore_Model_Type::n_states; ++j)
+            unsigned n_events = event_seqs.at(k).size();
+            for (unsigned i = 0; i < n_events; ++i)
             {
-                Float_Type x0 = fwbw.log_posterior(i, j) - 2 * pm.state(j).log_level_stdv;
-                Float_Type x1 = x0 + pm.state(j).log_level_mean;
-                Float_Type x2 = x1 + pm.state(j).log_level_mean;
-                LOG(debug2)
-                << "inner_loop i=" << i << " j=" << j
-                << " x0=" << x0 << " x1=" << x1 << " x2=" << x2 << std::endl;
-                s_lss[0].add(x0);
-                s_lss[1].add(x1);
-                s_lss[2].add(x2);
+                Float_Type log_x_i = event_seqs[k][i].log_mean;
+                Float_Type log_t_i = event_seqs[k][i].log_start;
+                LOG(debug1)
+                    << "outter_loop i=" << i
+                    << " log_x_i=" << log_x_i
+                    << " log_t_i=" << log_t_i << std::endl;
+                std::array< LogSumSet_Type, 3 > s_lss = {{ false, false, false }};
+                for (unsigned j = 0; j < Pore_Model_Type::n_states; ++j)
+                {
+                    Float_Type x0 = fwbw[k].log_posterior(i, j) - 2 * pm.state(j).log_level_stdv;
+                    Float_Type x1 = x0 + pm.state(j).log_level_mean;
+                    Float_Type x2 = x1 + pm.state(j).log_level_mean;
+                    LOG(debug2)
+                        << "inner_loop i=" << i << " j=" << j
+                        << " x0=" << x0 << " x1=" << x1 << " x2=" << x2 << std::endl;
+                    s_lss[0].add(x0);
+                    s_lss[1].add(x1);
+                    s_lss[2].add(x2);
+                }
+                A_lss[0][0].add(s_lss[0].val());
+                A_lss[0][1].add(s_lss[1].val());
+                A_lss[0][2].add(s_lss[0].val() + log_t_i);
+                A_lss[1][1].add(s_lss[2].val());
+                A_lss[1][2].add(s_lss[1].val() + log_t_i);
+                A_lss[2][2].add(s_lss[0].val() + 2 * log_t_i);
+                B_lss[0].add(s_lss[0].val() + log_x_i);
+                B_lss[1].add(s_lss[1].val() + log_x_i);
+                B_lss[2].add(s_lss[0].val() + log_x_i + log_t_i);
             }
-            A_lss[0][0].add(s_lss[0].val());
-            A_lss[0][1].add(s_lss[1].val());
-            A_lss[0][2].add(s_lss[0].val() + log_t_i);
-            A_lss[1][1].add(s_lss[2].val());
-            A_lss[1][2].add(s_lss[1].val() + log_t_i);
-            A_lss[2][2].add(s_lss[0].val() + 2 * log_t_i);
-            B_lss[0].add(s_lss[0].val() + log_x_i);
-            B_lss[1].add(s_lss[1].val() + log_x_i);
-            B_lss[2].add(s_lss[0].val() + log_x_i + log_t_i);
         }
         // now compute matrices in normal space
         std::array< std::array< Float_Type, 3 >, 3 > A =
@@ -172,20 +182,24 @@ struct Model_Parameter_Trainer
         // finally, solve for var
         //   note the (unavoidable?) expensive logs
         LogSumSet_Type s{false};
-        for (unsigned i = 0; i < n_events; ++i)
+        for (unsigned k = 0; k < n_event_seqs; ++k)
         {
-            for (unsigned j = 0; j < Pore_Model_Type::n_states; ++j)
+            unsigned n_events = event_seqs.at(k).size();
+            for (unsigned i = 0; i < n_events; ++i)
             {
-                float x = fwbw.log_posterior(i, j) - 2 * pm.state(j).log_level_stdv;
-                float y =
-                    std::log(std::abs(events[i].mean
-                                      - new_pm_params.shift
-                                      - new_pm_params.scale * pm.state(j).level_mean
-                                      - new_pm_params.drift * events[i].start));
-                s.add(x + 2 * y);
+                for (unsigned j = 0; j < Pore_Model_Type::n_states; ++j)
+                {
+                    float x = fwbw[k].log_posterior(i, j) - 2 * pm.state(j).log_level_stdv;
+                    float y =
+                        std::log(std::abs(event_seqs[k][i].mean
+                                          - new_pm_params.shift
+                                          - new_pm_params.scale * pm.state(j).level_mean
+                                          - new_pm_params.drift * event_seqs[k][i].start));
+                    s.add(x + 2 * y);
+                }
             }
         }
-        new_pm_params.var = std::sqrt(std::exp(s.val()) / n_events);
+        new_pm_params.var = std::sqrt(std::exp(s.val()) / total_num_events);
         LOG(debug1)
             << "var_solution " << new_pm_params.var << std::endl;
     } // train_one_round

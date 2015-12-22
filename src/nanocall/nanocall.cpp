@@ -33,7 +33,7 @@ namespace opts
     //
     ValueArg< float > scale_min_fit_progress("", "scale-min-fit-progress", "Minimum scaling fit progress.", false, 1.0, "float", cmd_parser);
     ValueArg< unsigned > scale_max_rounds("", "scale-max-rounds", "Maximum scaling rounds.", false, 10, "int", cmd_parser);
-    ValueArg< unsigned > scale_num_events("", "scale-num-events", "Number of events used for model scaling.", false, 100, "int", cmd_parser);
+    ValueArg< unsigned > scale_num_events("", "scale-num-events", "Number of events used for model scaling.", false, 200, "int", cmd_parser);
     SwitchArg scale_only("", "scale-only", "Stop after computing model scalings.", cmd_parser);
     SwitchArg accurate_scaling("", "accurate", "Compute model scalings more accurately.", cmd_parser);
     ValueArg< float > pr_cutoff("", "pr-cutoff", "Minimum value for transition probabilities; smaller values are set to zero.", false, .001, "float", cmd_parser);
@@ -261,11 +261,11 @@ void train_reads(const Pore_Model_Dict_Type& models,
                     }
                 }
                 assert(not model_list.empty());
-                // make list of events on which to train
-                Event_Sequence_Type train_events(
-                    read_summary.events[st].begin(),
-                    read_summary.events[st].begin()
-                    + std::min((size_t)opts::scale_num_events.get(), read_summary.events[st].size()));
+                // create 2 list of events on which to train
+                unsigned n_events = min((size_t)opts::scale_num_events.get(), read_summary.events[st].size());
+                std::vector< Event_Sequence_Type > train_events{
+                    {read_summary.events[st].begin(), read_summary.events[st].begin() + n_events / 2},
+                    {read_summary.events[st].end() - n_events / 2, read_summary.events[st].end()}};
                 for (const auto& m_name : model_list)
                 {
                     unsigned round = 0;
@@ -326,7 +326,8 @@ void train_reads(const Pore_Model_Dict_Type& models,
                         << "] strand [" << st
                         << "] model [" << m_name
                         << "] parameters [" << crt_pm_params
-                        << "] fit [" << crt_fit << "]" << std::endl;
+                        << "] fit [" << crt_fit
+                        << "] rounds [" << round << "]" << std::endl;
                     read_summary.params[st][m_name] = std::move(crt_pm_params);
                 } // for m_name
             } // for st
