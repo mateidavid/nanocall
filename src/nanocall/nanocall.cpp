@@ -11,6 +11,7 @@
 #include "Fast5_Summary.hpp"
 #include "Viterbi.hpp"
 #include "Forward_Backward.hpp"
+#include "Model_Parameter_Trainer.hpp"
 #include "logger.hpp"
 #include "alg.hpp"
 #include "zstr.hpp"
@@ -29,9 +30,10 @@ namespace opts
     ValueArg< string > stats_fn("", "stats", "Stats.", false, "", "file", cmd_parser);
     ValueArg< unsigned > min_read_len("", "min-len", "Minimum read length.", false, 1000, "int", cmd_parser);
     ValueArg< unsigned > fasta_line_width("", "fasta-line-width", "Maximum fasta line width.", false, 80, "int", cmd_parser);
-    ValueArg< float > accurate_scale_shift_step("", "accurate-scale-shift-step", "Step size for \"shift\" scaling.", false, 3.0, "float", cmd_parser);
-    ValueArg< unsigned > accurate_scale_num_shift_steps("", "accurate-scale-num-shift-steps", "Number of steps for \"shift\" scaling.", false, 7, "int", cmd_parser);
-    ValueArg< unsigned > accurate_scale_num_events("", "accurate-scale-num-events", "Number of events used for initial model scaling.", false, 100, "int", cmd_parser);
+    //
+    ValueArg< float > scale_min_fit_progress("", "scale-min-fit-progress", "Minimum scaling fit progress.", false, 1.0, "float", cmd_parser);
+    ValueArg< unsigned > scale_max_rounds("", "scale-max-rounds", "Maximum scaling rounds.", false, 10, "int", cmd_parser);
+    ValueArg< unsigned > scale_num_events("", "scale-num-events", "Number of events used for model scaling.", false, 100, "int", cmd_parser);
     SwitchArg scale_only("", "scale-only", "Stop after computing model scalings.", cmd_parser);
     SwitchArg accurate_scaling("", "accurate", "Compute model scalings more accurately.", cmd_parser);
     ValueArg< float > pr_cutoff("", "pr-cutoff", "Minimum value for transition probabilities; smaller values are set to zero.", false, .001, "float", cmd_parser);
@@ -263,39 +265,69 @@ void train_reads(const Pore_Model_Dict_Type& models,
                 Event_Sequence_Type train_events(
                     read_summary.events[st].begin(),
                     read_summary.events[st].begin()
-                    + std::min((size_t)opts::accurate_scale_num_events.get(), read_summary.events[st].size()));
+                    + std::min((size_t)opts::scale_num_events.get(), read_summary.events[st].size()));
                 for (const auto& m_name : model_list)
                 {
-                    //
-                    // try several values for shift, evenly spaced around the start point
-                    //
-                    float orig_shift = read_summary.params[st][m_name].shift;
-                    float shift_step = opts::accurate_scale_shift_step;
-                    unsigned num_shift_steps = opts::accurate_scale_num_shift_steps;
-                    float min_shift = orig_shift - shift_step * (unsigned)(num_shift_steps / 2);
-                    float best_log_pr_data = -INFINITY;
-                    Pore_Model_Parameters_Type best_params;
-                    for (unsigned k = 0; k < num_shift_steps; ++k)
+                    unsigned round = 0;
+                    Pore_Model_Parameters_Type crt_pm_params = read_summary.params[st][m_name];
+                    float crt_fit = -INFINITY;
+                    while (true)
                     {
-                        Pore_Model_Type pm(models.at(m_name));
-                        Pore_Model_Parameters_Type pm_params = read_summary.params[st][m_name];
-                        pm_params.shift = min_shift + shift_step * k;
-                        pm.scale(pm_params);
-                        Forward_Backward_Type fwbw;
-                        fwbw.fill(pm, transitions, train_events);
+                        Pore_Model_Parameters_Type old_pm_params(crt_pm_params);
+                        float old_fit(crt_fit);
+                        bool done;
+
+                        Model_Parameter_Trainer_Type::train_one_round(
+                            models.at(m_name), transitions, train_events,
+                            old_pm_params, crt_pm_params, crt_fit, done);
+
+                        if (done)
+                        {
+                            // singularity detected; revert to previous params and stop
+                            crt_pm_params = old_pm_params;
+                            crt_fit = old_fit;
+                            break;
+                        }
+
                         LOG(debug)
-                            << "accurate_scaling read [" << read_summary.read_id
+                            << "scaling_round read [" << read_summary.read_id
                             << "] strand [" << st
                             << "] model [" << m_name
-                            << "] parameters [" << pm_params
-                            << "] log_pr_data [" << fwbw.log_pr_data() << "]" << std::endl;
-                        if (fwbw.log_pr_data() > best_log_pr_data)
+                            << "] old_params [" << old_pm_params
+                            << "] old_fit [" << old_fit
+                            << "] crt_params [" << crt_pm_params
+                            << "] crt_fit [" << crt_fit << "]" << std::endl;
+
+                        if (crt_fit < old_fit)
                         {
-                            best_log_pr_data = fwbw.log_pr_data();
-                            best_params = pm_params;
+                            LOG(info) << "scaling_regression read [" << read_summary.read_id
+                            << "] strand [" << st
+                            << "] model [" << m_name
+                            << "] old_params [" << old_pm_params
+                            << "] old_fit [" << old_fit
+                            << "] crt_params [" << crt_pm_params
+                            << "] crt_fit [" << crt_fit << "]" << std::endl;
+                            crt_pm_params = old_pm_params;
+                            crt_fit = old_fit;
+                            break;
                         }
-                    }
-                    read_summary.params[st][m_name] = std::move(best_params);
+
+                        ++round;
+                        // stop condition
+                        if (round >= opts::scale_max_rounds
+                            or (round > 1 and crt_fit < old_fit + opts::scale_min_fit_progress))
+                        {
+                            break;
+                        }
+
+                    }; // while true
+                    LOG(info)
+                        << "scaling_result read [" << read_summary.read_id
+                        << "] strand [" << st
+                        << "] model [" << m_name
+                        << "] parameters [" << crt_pm_params
+                        << "] fit [" << crt_fit << "]" << std::endl;
+                    read_summary.params[st][m_name] = std::move(crt_pm_params);
                 } // for m_name
             } // for st
             read_summary.drop_events();
