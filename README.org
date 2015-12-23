@@ -61,6 +61,8 @@ Nanocall can be built from source code if you have CMake and Visual Studio 2015 
 
 2. Visual Studio can be found [[https://www.visualstudio.com/en-us/downloads/download-visual-studio-vs.aspx][here]]. Make sure to *install C++* by choosing =Custom > Programming Languages > C++=. This is not selected by default.
 
-3. Run =win32-build.bat=
+3. (Same as Step 2 from above) [[http://www.hdfgroup.org/ftp/HDF5/current/bin/windows/extra/hdf5-1.8.16-win32-vs2015-shared.zip][HDF5 for Windows (32-bit) using VS 2015]]. Download and run the Windows Installer. Make sure to *restart your computer* after this step.
 
-4. The executable will be generated in =build/nanocall/Release=
+4. Run =win32-build.bat=
+
+5. The executable will be generated in =build/nanocall/Release=
