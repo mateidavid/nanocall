@@ -26,7 +26,7 @@ public:
     std::string base_file_name;
     std::string read_id;
     std::array< std::string, 2 > preferred_model;
-    std::array< std::map< std::string, Pore_Model_Parameters_Type >, 2 > params;
+    std::array< std::map< std::string, Pore_Model_Parameters_Type >, 3 > params;
     std::array< unsigned, 4 > strand_bounds;
     std::array< Float_Type, 2 > time_length;
     unsigned num_ed_events;
@@ -47,9 +47,10 @@ public:
     std::array< Event_Sequence_Type, 2 > events;
 
     Fast5_Summary() : valid(false) {}
-    Fast5_Summary(const std::string fn, const Pore_Model_Dict_Type& models) : valid(false) { summarize(fn, models); }
+    Fast5_Summary(const std::string fn, const Pore_Model_Dict_Type& models, bool scale_strands_together)
+        : valid(false) { summarize(fn, models, scale_strands_together); }
 
-    void summarize(const std::string& fn, const Pore_Model_Dict_Type& models)
+    void summarize(const std::string& fn, const Pore_Model_Dict_Type& models, bool scale_strands_together)
     {
         valid = true;
         file_name = fn;
@@ -91,35 +92,65 @@ public:
                 //
                 // compute initial model scalings
                 //
-                load_events();
-                for (unsigned st = 0; st < 2; ++st)
+                load_events(scale_strands_together);
+                if (scale_strands_together
+                    and events[0].size() >= min_read_len()
+                    and events[1].size() >= min_read_len())
                 {
-                    if (events[st].size() < min_read_len())
+                    auto r0 = alg::mean_stdv_of< Float_Type >(
+                        events[0],
+                        [] (const Event_Type& ev) { return ev.mean; });
+                    auto r1 = alg::mean_stdv_of< Float_Type >(
+                        events[1],
+                        [] (const Event_Type& ev) { return ev.mean; });
+                    for (const auto& p0 : models)
+                        if (p0.second.strand() == 0 or p0.second.strand() == 2)
+                            for (const auto& p1 : models)
+                                if (p1.second.strand() == 1 or p1.second.strand() == 2)
+                                {
+                                    auto m_name_str = p0.first + '+' + p1.first;
+                                    Pore_Model_Parameters_Type param;
+                                    param.scale = (r0.second / p0.second.stdv()
+                                                   + r1.second / p1.second.stdv()) / 2;
+                                    param.shift = (r0.first - param.scale * p0.second.mean()
+                                                   + r1.first - param.scale * p1.second.mean()) / 2;
+                                    LOG("Fast5_Summary", debug)
+                                        << "initial_scaling read [" << read_id << "] strand [" << 2
+                                        << "] model [" << m_name_str
+                                        << "] parameters [" << param << "]" << std::endl;
+                                    params[2][m_name_str] = std::move(param);
+                                }
+                }
+                else // not scale_strands_together
+                {
+                    for (unsigned st = 0; st < 2; ++st)
                     {
-                        continue;
-                    }
-                    auto r = alg::mean_stdv_of< Float_Type >(events[st], [] (const Event_Type& ev) { return ev.mean; });
-                    for (const auto& p : models)
-                    {
-                        if (p.second.strand() == st or p.second.strand() == 2)
+                        if (events[st].size() < min_read_len()) continue;
+                        auto r = alg::mean_stdv_of< Float_Type >(
+                            events[st],
+                            [] (const Event_Type& ev) { return ev.mean; });
+                        for (const auto& p : models)
                         {
-                            Pore_Model_Parameters_Type param;
-                            param.scale = r.second / p.second.stdv();
-                            param.shift = r.first - param.scale * p.second.mean();
-                            LOG("Fast5_Summary", debug)
-                                << "initial_scaling read [" << read_id << "] strand [" << st
-                                << "] model [" << p.first << "] parameters [" << param << "]" << std::endl;
-                            params[st][p.first] = std::move(param);
+                            if (p.second.strand() == st or p.second.strand() == 2)
+                            {
+                                Pore_Model_Parameters_Type param;
+                                param.scale = r.second / p.second.stdv();
+                                param.shift = r.first - param.scale * p.second.mean();
+                                LOG("Fast5_Summary", debug)
+                                    << "initial_scaling read [" << read_id << "] strand [" << st
+                                    << "] model [" << p.first << "] parameters [" << param << "]" << std::endl;
+                                params[st][p.first] = std::move(param);
+                            }
                         }
+                        time_length[st] = events[st].rbegin()->start + events[st].rbegin()->length;
                     }
-                    time_length[st] = events[st].rbegin()->start + events[st].rbegin()->length;
                 }
                 ed_events.clear();
             } // if abasic_level > 1.0
         } // if have_ed_events
     }
 
-    void load_events()
+    void load_events(bool scale_strands_together)
     {
         assert(valid and have_ed_events);
         if (ed_events.empty())
@@ -136,14 +167,14 @@ public:
         {
             events[st].clear();
             if (strand_bounds[2 * st + 0] == 0) continue;
-            for (unsigned j = strand_bounds[2 * st + 0]; j < strand_bounds[2 * st + 1]; ++j)
+            for (unsigned j = strand_bounds[2 * st]; j < strand_bounds[2 * st + 1]; ++j)
             {
                 if (filter_ed_event(ed_events[j], abasic_level))
                 {
                     Event_Type e;
                     e.mean = ed_events[j].mean;
                     e.stdv = ed_events[j].stdv;
-                    e.start = (ed_events[j].start - ed_events[strand_bounds[2 * st + 0]].start) / sampling_rate;
+                    e.start = (ed_events[j].start - ed_events[strand_bounds[scale_strands_together? 0 : 2 * st]].start) / sampling_rate;
                     e.length = ed_events[j].length / sampling_rate;
                     e.update_logs();
                     events[st].push_back(e);

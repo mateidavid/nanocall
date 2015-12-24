@@ -3,6 +3,7 @@
 
 #include <array>
 #include <vector>
+#include <map>
 
 #include "Pore_Model.hpp"
 #include "State_Transitions.hpp"
@@ -22,29 +23,40 @@ struct Model_Parameter_Trainer
     typedef logsum::logsumset< Float_Type > LogSumSet_Type;
 
     static void train_one_round(
-        const Pore_Model_Type& pm,
+        const std::vector< const Event_Sequence_Type* >& event_seq_ptrs,
+        const std::vector< const Pore_Model_Type* >& model_ptrs,
         const State_Transitions_Type& transitions,
-        const std::vector< Event_Sequence_Type >& event_seqs,
         const Pore_Model_Parameters_Type& crt_pm_params,
         Pore_Model_Parameters_Type& new_pm_params,
         Float_Type& new_fit,
         bool& done)
     {
-        unsigned n_event_seqs = event_seqs.size();
+        // accept either 1 model per sequence, or just 1 model
+        assert(model_ptrs.size() == event_seq_ptrs.size() or model_ptrs.size() == 1);
+        bool single_model = model_ptrs.size() == 1;
+        unsigned n_event_seqs = event_seq_ptrs.size();
         unsigned total_num_events = alg::accumulate(
-            event_seqs, 0u, [] (unsigned s, const Event_Sequence_Type& events) { return s + events.size(); });
+            event_seq_ptrs, 0u,
+            [] (unsigned s, const Event_Sequence_Type* events_ptr) { return s + events_ptr->size(); });
         done = false;
         // apply current scaling parameters, drift correction, and run fwbw
-        Pore_Model_Type scaled_pm(pm);
-        scaled_pm.scale(crt_pm_params);
-        std::vector< Event_Sequence_Type > corrected_event_seqs(event_seqs);
+        std::map< const Pore_Model_Type*, Pore_Model_Type > scaled_pm_map;
+        for (const auto pm_p : model_ptrs)
+        {
+            scaled_pm_map.emplace(std::make_pair(pm_p, *pm_p));
+            scaled_pm_map[pm_p].scale(crt_pm_params);
+        }
+        std::vector< Event_Sequence_Type > corrected_event_seqs(n_event_seqs);
         std::vector< Forward_Backward_Type > fwbw(n_event_seqs);
         new_fit = 0;
         for (unsigned k = 0; k < n_event_seqs; ++k)
         {
-            corrected_event_seqs.at(k).apply_drift_correction(crt_pm_params.drift);
-            fwbw.at(k).fill(scaled_pm, transitions, corrected_event_seqs.at(k));
-            new_fit += fwbw.at(k).log_pr_data();
+            const Pore_Model_Type& scaled_pm = scaled_pm_map[model_ptrs[single_model? 0 : k]];
+            Event_Sequence_Type& corrected_events = corrected_event_seqs[k];
+            corrected_events = *event_seq_ptrs[k];
+            corrected_events.apply_drift_correction(crt_pm_params.drift);
+            fwbw[k].fill(scaled_pm, transitions, corrected_events);
+            new_fit += fwbw[k].log_pr_data();
         }
         // compute the scaling matrices (first in logspace)
         // against unscaled pm & uncorrected events
@@ -55,13 +67,15 @@ struct Model_Parameter_Trainer
         std::array< LogSumSet_Type, 3 > B_lss = {{ false, false, false }};
         for (unsigned k = 0; k < n_event_seqs; ++k)
         {
-            unsigned n_events = event_seqs.at(k).size();
+            const Event_Sequence_Type& events = *event_seq_ptrs[k];
+            const Pore_Model_Type& pm = *model_ptrs[single_model? 0 : k];
+            unsigned n_events = events.size();
             for (unsigned i = 0; i < n_events; ++i)
             {
-                Float_Type log_x_i = event_seqs[k][i].log_mean;
-                Float_Type log_t_i = event_seqs[k][i].log_start;
+                Float_Type log_x_i = events[i].log_mean;
+                Float_Type log_t_i = events[i].log_start;
                 LOG(debug1)
-                    << "outter_loop i=" << i
+                    << "outter_loop k=" << k << " i=" << i
                     << " log_x_i=" << log_x_i
                     << " log_t_i=" << log_t_i << std::endl;
                 std::array< LogSumSet_Type, 3 > s_lss = {{ false, false, false }};
@@ -71,7 +85,7 @@ struct Model_Parameter_Trainer
                     Float_Type x1 = x0 + pm.state(j).log_level_mean;
                     Float_Type x2 = x1 + pm.state(j).log_level_mean;
                     LOG(debug2)
-                        << "inner_loop i=" << i << " j=" << j
+                        << "inner_loop k=" << k << " i=" << i << " j=" << j
                         << " x0=" << x0 << " x1=" << x1 << " x2=" << x2 << std::endl;
                     s_lss[0].add(x0);
                     s_lss[1].add(x1);
@@ -133,6 +147,7 @@ struct Model_Parameter_Trainer
             if (p_val < 1e-7)
             {
                 done = true;
+                new_pm_params = crt_pm_params;
                 return;
             }
             // if necessary, interchange rows i & p
@@ -184,17 +199,19 @@ struct Model_Parameter_Trainer
         LogSumSet_Type s{false};
         for (unsigned k = 0; k < n_event_seqs; ++k)
         {
-            unsigned n_events = event_seqs.at(k).size();
+            const Event_Sequence_Type& events = *event_seq_ptrs[k];
+            const Pore_Model_Type& pm = *model_ptrs[single_model? 0 : k];
+            unsigned n_events = events.size();
             for (unsigned i = 0; i < n_events; ++i)
             {
                 for (unsigned j = 0; j < Pore_Model_Type::n_states; ++j)
                 {
                     float x = fwbw[k].log_posterior(i, j) - 2 * pm.state(j).log_level_stdv;
                     float y =
-                        std::log(std::abs(event_seqs[k][i].mean
+                        std::log(std::abs(events[i].mean
                                           - new_pm_params.shift
                                           - new_pm_params.scale * pm.state(j).level_mean
-                                          - new_pm_params.drift * event_seqs[k][i].start));
+                                          - new_pm_params.drift * events[i].start));
                     s.add(x + 2 * y);
                 }
             }
