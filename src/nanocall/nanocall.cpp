@@ -31,7 +31,7 @@ namespace opts
     ValueArg< unsigned > min_read_len("", "min-len", "Minimum read length.", false, 1000, "int", cmd_parser);
     ValueArg< unsigned > fasta_line_width("", "fasta-line-width", "Maximum fasta line width.", false, 80, "int", cmd_parser);
     //
-    SwitchArg scale_select_model_single_round("", "scale-select-model-single-round", "Use a single round of FWBW to select best model per strand.", cmd_parser);
+    ValueArg< float > scale_select_model_threshold("", "scale-select-model-threshold", "Select best model per strand during rescaling if log score better by threshold.", false, INFINITY, "float",cmd_parser);
     SwitchArg scale_strands_together("", "scale-strands-together", "Use same scaling parameters for both strands.", cmd_parser);
     ValueArg< float > scale_min_fit_progress("", "scale-min-fit-progress", "Minimum scaling fit progress.", false, 1.0, "float", cmd_parser);
     ValueArg< unsigned > scale_max_rounds("", "scale-max-rounds", "Maximum scaling rounds.", false, 10, "int", cmd_parser);
@@ -296,7 +296,8 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                 }
                 // run fwbw for 1 round, update params
                 map< pair< string, string >, float > model_fit;
-                for (const auto& m_name_0 : model_list[0]) 
+                /*
+                for (const auto& m_name_0 : model_list[0])
                 {
                     for (const auto& m_name_1 : model_list[1])
                     {
@@ -338,7 +339,8 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                         << "selected_model read [" << read_summary.read_id
                         << "] strand [2] model [" << it_max->first.first + '+' + it_max->first.second << "]" << endl;
                 }
-                for (const auto& m_name_0 : model_list[0]) 
+                */
+                for (const auto& m_name_0 : model_list[0])
                 {
                     for (const auto& m_name_1 : model_list[1])
                     {
@@ -348,9 +350,10 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                         vector< const Pore_Model_Type* > model_ptrs;
                         model_ptrs.insert(model_ptrs.end(), train_event_seqs[0].size(), &models.at(m_name_0));
                         model_ptrs.insert(model_ptrs.end(), train_event_seqs[1].size(), &models.at(m_name_1));
-                        unsigned round = 1;
-                        Pore_Model_Parameters_Type crt_pm_params = read_summary.params[2].at(m_name_str);
-                        float crt_fit = model_fit[m_name];
+                        unsigned round = 0;
+                        Pore_Model_Parameters_Type& crt_pm_params = read_summary.params[2].at(m_name_str);
+                        float& crt_fit = model_fit[m_name];
+                        crt_fit = -INFINITY;
                         while (true)
                         {
                             Pore_Model_Parameters_Type old_pm_params(crt_pm_params);
@@ -408,11 +411,25 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                             << "] parameters [" << crt_pm_params
                             << "] fit [" << crt_fit
                             << "] rounds [" << round << "]" << endl;
-                        read_summary.params[2].at(m_name_str) = crt_pm_params;
+                        /*
                         read_summary.params[0][m_name_0] = crt_pm_params;
                         read_summary.params[1][m_name_1] = crt_pm_params;
+                        */
                     } // for m_name[1]
                 } // for m_name[0]
+                assert(opts::scale_select_model_threshold.get() == 0.0);
+                if (true)
+                {
+                    // note: always select model here if scaling strands together
+                    auto it_max = alg::max_of(
+                        model_fit,
+                        [] (const decltype(model_fit)::value_type& p) { return p.second; });
+                    read_summary.preferred_model[0] = it_max->first.first;
+                    read_summary.preferred_model[1] = it_max->first.second;
+                    LOG(debug)
+                        << "selected_model read [" << read_summary.read_id
+                        << "] strand [2] model [" << it_max->first.first + '+' + it_max->first.second << "]" << endl;
+                }
             }
             else // not opts::scale_strands_together
             {
@@ -420,13 +437,15 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                 {
                     // if not enough events, ignore strand
                     if (read_summary.events[st].size() < opts::min_read_len) continue;
+                    // prepare vector of event sequences
                     vector< const Event_Sequence_Type* > train_event_seq_ptrs;
                     for (const auto& events : train_event_seqs[st])
                     {
                         train_event_seq_ptrs.push_back(&events);
                     }
-                    // run fwbw for 1 round and update params
                     map< string, float > model_fit;
+                    /*
+                    // run fwbw for 1 round and update params
                     for (const auto& m_name : model_list[st])
                     {
                         Pore_Model_Parameters_Type old_pm_params = read_summary.params[st].at(m_name);
@@ -458,12 +477,14 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                             << "] strand [" << st
                             << "] model [" << it_max->first << "]" << endl;
                     }
+                    */
                     // continue remaining training rounds
                     for (const auto& m_name : model_list[st])
                     {
-                        unsigned round = 1;
-                        Pore_Model_Parameters_Type crt_pm_params = read_summary.params[st].at(m_name);
-                        float crt_fit = model_fit[m_name];
+                        unsigned round = 0;
+                        Pore_Model_Parameters_Type& crt_pm_params = read_summary.params[st].at(m_name);
+                        float& crt_fit = model_fit[m_name];
+                        crt_fit = -INFINITY;
                         while (true)
                         {
                             Pore_Model_Parameters_Type old_pm_params(crt_pm_params);
@@ -521,11 +542,28 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                             << "] parameters [" << crt_pm_params
                             << "] fit [" << crt_fit
                             << "] rounds [" << round << "]" << endl;
-                        read_summary.params[st].at(m_name) = move(crt_pm_params);
                     } // for m_name
+                    if (opts::scale_select_model_threshold.get() < INFINITY)
+                    {
+                        auto it_max = alg::max_of(
+                            model_fit,
+                            [] (const decltype(model_fit)::value_type& p) { return p.second; });
+                        if (alg::all_of(
+                                model_fit,
+                                [&] (const decltype(model_fit)::value_type& p) {
+                                    return p.first == it_max->first
+                                        or p.second + opts::scale_select_model_threshold.get() < it_max->second;
+                                }))
+                        {
+                            read_summary.preferred_model[st] = it_max->first;
+                            LOG(debug)
+                                << "selected_model read [" << read_summary.read_id
+                                << "] strand [" << st
+                                << "] model [" << it_max->first << "]" << endl;
+                        }
+                    }
                 } // for st
             } // if not opts::scale_strands_together
-
             read_summary.drop_events();
         }, // process_item
         // progress_report
@@ -678,7 +716,7 @@ int real_main()
     init_transitions(transitions);
     init_files(files);
     init_reads(models, files, reads);
-    if (opts::accurate_scaling or opts::scale_strands_together or opts::scale_select_model_single_round)
+    if (opts::accurate_scaling)
     {
         // do some rescaling
         rescale_reads(models, transitions, reads);
@@ -706,15 +744,31 @@ int main(int argc, char * argv[])
     opts::cmd_parser.parse(argc, argv);
     logger::Logger::set_default_level(logger::level::info);
     logger::Logger::set_levels_from_options(opts::log_level);
-    Fast5_Summary_Type::min_read_len() = opts::min_read_len;
+    LOG(info) << "program: " << opts::cmd_parser.getProgramName() << endl;
+    LOG(info) << "version: " << opts::cmd_parser.getVersion() << endl;
+    LOG(info) << "args: " << opts::cmd_parser.getOrigArgv() << endl;
 #ifndef H5_HAVE_THREADSAFE
     if (opts::num_threads > 1)
     {
         LOG(warning) << "enabled multi-threading with non-threadsafe HDF5: using experimental locking" << endl;
     }
 #endif
-    LOG(info) << "program: " << opts::cmd_parser.getProgramName() << endl;
-    LOG(info) << "version: " << opts::cmd_parser.getVersion() << endl;
-    LOG(info) << "args: " << opts::cmd_parser.getOrigArgv() << endl;
+    Fast5_Summary_Type::min_read_len() = opts::min_read_len;
+    if (opts::scale_select_model_threshold.get() < 0.0)
+    {
+        LOG(error)
+            << "invalid scale_select_model_threshold: " << opts::scale_select_model_threshold.get() << endl;
+        return EXIT_FAILURE;
+    }
+    if (opts::scale_strands_together and opts::scale_select_model_threshold.get() != 0.0)
+    {
+        LOG(info)
+            << "scale_strands_together requires scale_select_model_threshold == 0.0" << endl;
+        opts::scale_select_model_threshold.get() = 0.0;
+    }
+    if (opts::scale_select_model_threshold.get() != INFINITY)
+    {
+        opts::accurate_scaling.set(true);
+    }
     return real_main();
 }
