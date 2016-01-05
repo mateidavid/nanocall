@@ -43,6 +43,7 @@ struct Model_Parameter_Trainer
         std::map< const Pore_Model_Type*, Pore_Model_Type > scaled_pm_map;
         for (const auto pm_p : model_ptrs)
         {
+            if (scaled_pm_map.count(pm_p)) continue;
             scaled_pm_map.emplace(std::make_pair(pm_p, *pm_p));
             scaled_pm_map[pm_p].scale(crt_pm_params);
         }
@@ -51,7 +52,7 @@ struct Model_Parameter_Trainer
         new_fit = 0;
         for (unsigned k = 0; k < n_event_seqs; ++k)
         {
-            const Pore_Model_Type& scaled_pm = scaled_pm_map[model_ptrs[single_model? 0 : k]];
+            const Pore_Model_Type& scaled_pm = scaled_pm_map.at(model_ptrs[single_model? 0 : k]);
             Event_Sequence_Type& corrected_events = corrected_event_seqs[k];
             corrected_events = *event_seq_ptrs[k];
             corrected_events.apply_drift_correction(crt_pm_params.drift);

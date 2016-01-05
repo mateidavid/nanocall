@@ -135,6 +135,14 @@ struct Pore_Model_State
                 + log_invgauss_pdf< Float_Type >(e.stdv, e.log_stdv, sd_mean, sd_lambda, log_sd_lambda));
     }
 
+    friend std::ostream& operator << (std::ostream& os, const Pore_Model_State& state)
+    {
+        os << state.level_mean << '\t'
+           << state.level_stdv << '\t'
+           << state.sd_mean << '\t'
+           << state.sd_stdv;
+        return os;
+    }
 }; // struct Pore_Model_State
 
 template < typename Float_Type = float, unsigned Kmer_Size = 6 >
@@ -201,11 +209,7 @@ public:
     {
         for (unsigned i = 0; i < pm.n_states; ++i)
         {
-            os << Kmer_Type::to_string(i) << '\t'
-               << pm.state(i).level_mean << '\t'
-               << pm.state(i).level_stdv << '\t'
-               << pm.state(i).sd_mean << '\t'
-               << pm.state(i).sd_stdv << std::endl;
+            os << Kmer_Type::to_string(i) << '\t' << pm.state(i) << std::endl;
         }
         return os;
     }

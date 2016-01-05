@@ -32,7 +32,7 @@ public:
         os << ev.mean << '\t'
            << ev.stdv << '\t'
            << ev.start << '\t'
-           << ev.length << std::endl;
+           << ev.length;
         return os;
     }
     friend std::istream & operator >> (std::istream& is, Event< Float_Type >& ev)

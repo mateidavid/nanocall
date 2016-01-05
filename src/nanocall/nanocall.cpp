@@ -26,6 +26,7 @@ namespace opts
     using namespace TCLAP;
     string description = "Call bases in Oxford Nanopore reads.";
     CmdLine cmd_parser(description, ' ', package_version);
+    //
     MultiArg< string > log_level("", "log", "Log level.", false, "string", cmd_parser);
     ValueArg< string > stats_fn("", "stats", "Stats.", false, "", "file", cmd_parser);
     ValueArg< unsigned > min_read_len("", "min-len", "Minimum read length.", false, 1000, "int", cmd_parser);
