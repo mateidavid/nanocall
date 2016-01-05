@@ -222,17 +222,33 @@ public:
         return os;
     }
 
+    static void write_tsv_header(std::ostream& os)
+    {
+        os << "file_name" << "\tread_name" << "\tnum_ed_events" << "\tabasic_level"
+           << "\ttemplate_start_idx" << "\ttemplate_end_idx"
+           << "\tcomplement_start_idx" << "\tcomplement_end_idx";
+        for (unsigned st = 0; st < 2; ++st)
+        {
+            os << "\tn" << st << "_model_name"
+               << "\tn" << st << "_scale"
+               << "\tn" << st << "_shift"
+               << "\tn" << st << "_drift"
+               << "\tn" << st << "_var"
+               << "\tn" << st << "_scale_sd"
+               << "\tn" << st << "_var_sd";
+        }
+    }
+
     void write_tsv(std::ostream& os) const
     {
         assert(have_ed_events);
         os << base_file_name << '\t' << read_id << '\t' << num_ed_events << '\t' << abasic_level
            << '\t' << strand_bounds[0] << '\t' << strand_bounds[1]
-           << '\t' << strand_bounds[2] << '\t' << strand_bounds[3]
-           << '\t' << preferred_model[0] << '\t' << preferred_model[1];
+           << '\t' << strand_bounds[2] << '\t' << strand_bounds[3];
         for (unsigned st = 0; st < 2; ++st)
         {
-            os << '\t';
-            if (params[st].count(preferred_model[st]))
+            os << '\t' << preferred_model[st] << '\t';
+            if (not preferred_model[st].empty())
             {
                 params[st].at(preferred_model[st]).write_tsv(os);
             }

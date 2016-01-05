@@ -731,6 +731,8 @@ int real_main()
     if (not opts::stats_fn.get().empty())
     {
         strict_fstream::ofstream ofs(opts::stats_fn);
+        Fast5_Summary_Type::write_tsv_header(ofs);
+        ofs << endl;
         for (const auto& s : reads)
         {
             s.write_tsv(ofs);
