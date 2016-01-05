@@ -29,7 +29,7 @@ namespace opts
     //
     MultiArg< string > log_level("", "log", "Log level.", false, "string", cmd_parser);
     ValueArg< string > stats_fn("", "stats", "Stats.", false, "", "file", cmd_parser);
-    ValueArg< unsigned > min_read_len("", "min-len", "Minimum read length.", false, 1000, "int", cmd_parser);
+    ValueArg< unsigned > min_read_len("", "min-len", "Minimum read length.", false, 10, "int", cmd_parser);
     ValueArg< unsigned > fasta_line_width("", "fasta-line-width", "Maximum fasta line width.", false, 80, "int", cmd_parser);
     //
     ValueArg< float > scale_select_model_threshold("", "scale-select-model-threshold", "Select best model per strand during rescaling if log score better by threshold.", false, INFINITY, "float",cmd_parser);
@@ -213,12 +213,7 @@ void init_reads(const Pore_Model_Dict_Type& models,
     {
         Fast5_Summary_Type s(f, models, opts::scale_strands_together);
         LOG(info) << "summary: " << s << endl;
-        if (s.have_ed_events
-            and (s.strand_bounds[1] >= s.strand_bounds[0] + opts::min_read_len
-                 or s.strand_bounds[3] >= s.strand_bounds[2] + opts::min_read_len))
-        {
-            reads.emplace_back(move(s));
-        }
+        reads.emplace_back(move(s));
     }
 } // init_reads
 

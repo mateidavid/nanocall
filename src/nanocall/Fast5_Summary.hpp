@@ -157,7 +157,11 @@ public:
 
     void load_events(bool scale_strands_together)
     {
-        assert(valid and have_ed_events);
+        assert(valid);
+        if (not have_ed_events)
+        {
+            return;
+        }
         if (ed_events.empty())
         {
 #ifndef H5_HAVE_THREADSAFE
