@@ -89,10 +89,16 @@ public:
             if (abasic_level > 1.0)
             {
                 detect_strands();
+                load_events(scale_strands_together);
+                // compute time lengths
+                for (unsigned st = 0; st < 2; ++st)
+                {
+                    if (events[st].size() < min_read_len()) continue;
+                    time_length[st] = events[st].rbegin()->start + events[st].rbegin()->length;
+                }
                 //
                 // compute initial model scalings
                 //
-                load_events(scale_strands_together);
                 if (scale_strands_together
                     and events[0].size() >= min_read_len()
                     and events[1].size() >= min_read_len())
@@ -142,7 +148,6 @@ public:
                                 params[st][p.first] = std::move(param);
                             }
                         }
-                        time_length[st] = events[st].rbegin()->start + events[st].rbegin()->length;
                     }
                 }
                 ed_events.clear();
