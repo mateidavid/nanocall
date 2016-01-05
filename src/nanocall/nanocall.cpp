@@ -249,7 +249,7 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                 // if not enough events, ignore strand
                 if (read_summary.events[st].size() < opts::min_read_len) continue;
                 // create list of models to try
-                if (models.count(read_summary.preferred_model[st]))
+                if (not read_summary.preferred_model[st].empty())
                 {
                     // if we have a preferred model, use that
                     model_list[st].push_back(read_summary.preferred_model[st]);
@@ -425,11 +425,16 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                     auto it_max = alg::max_of(
                         model_fit,
                         [] (const decltype(model_fit)::value_type& p) { return p.second; });
-                    read_summary.preferred_model[0] = it_max->first.first;
-                    read_summary.preferred_model[1] = it_max->first.second;
+                    const auto& m_name_0 = it_max->first.first;
+                    const auto& m_name_1 = it_max->first.second;
+                    auto m_name_str = m_name_0 + '+' + m_name_1;
+                    read_summary.preferred_model[0] = m_name_0;
+                    read_summary.preferred_model[1] = m_name_1;
+                    read_summary.params[0][it_max->first.first] = read_summary.params[2].at(m_name_str);
+                    read_summary.params[1][it_max->first.second] = read_summary.params[2].at(m_name_str);
                     LOG(debug)
                         << "selected_model read [" << read_summary.read_id
-                        << "] strand [2] model [" << it_max->first.first + '+' + it_max->first.second << "]" << endl;
+                        << "] strand [2] model [" << m_name_str << "]" << endl;
                 }
             }
             else // not opts::scale_strands_together
@@ -619,7 +624,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                 if (read_summary.events[st].size() < opts::min_read_len) continue;
                 // create list of models to try
                 list< string > model_sublist;
-                if (models.count(read_summary.preferred_model[st]))
+                if (not read_summary.preferred_model[st].empty())
                 {
                     // if we have a preferred model, use that
                     model_sublist.push_back(read_summary.preferred_model[st]);
