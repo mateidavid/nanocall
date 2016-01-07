@@ -425,7 +425,7 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                         const auto& m_name_1 = it_max->first.second;
                         auto m_name_str = m_name_0 + '+' + m_name_1;
                         read_summary.preferred_model[2] = m_name_str;
-                        LOG(debug)
+                        LOG(info)
                             << "selected_model read [" << read_summary.read_id
                             << "] strand [2] model [" << m_name_str << "]" << endl;
                     }
@@ -556,7 +556,7 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                                 }))
                         {
                             read_summary.preferred_model[st] = it_max->first;
-                            LOG(debug)
+                            LOG(info)
                                 << "selected_model read [" << read_summary.read_id
                                 << "] strand [" << st
                                 << "] model [" << it_max->first << "]" << endl;
@@ -719,7 +719,8 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                         << "] model [" << best_m_name[st]
                         << "] parameters " << best_params
                         << " log_path_prob [" << best_log_path_prob[st] << "]" << endl;
-                    read_summary.preferred_model[2] = best_m_name_str;
+                    read_summary.preferred_model[st] = best_m_name[st];
+                    read_summary.params[st][best_m_name[st]] = best_params;
                     ostringstream tmp;
                     tmp << read_summary.read_id << ":" << read_summary.base_file_name << ":" << st;
                     write_fasta(oss, tmp.str(), *base_seq_ptr[st]);
