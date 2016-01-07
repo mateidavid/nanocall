@@ -25,7 +25,7 @@ public:
     std::string file_name;
     std::string base_file_name;
     std::string read_id;
-    std::array< std::string, 2 > preferred_model;
+    std::array< std::string, 3 > preferred_model;
     std::array< std::map< std::string, Pore_Model_Parameters_Type >, 3 > params;
     std::array< unsigned, 4 > strand_bounds;
     std::array< Float_Type, 2 > time_length;

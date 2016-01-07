@@ -407,29 +407,28 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                             << "] parameters [" << crt_pm_params
                             << "] fit [" << crt_fit
                             << "] rounds [" << round << "]" << endl;
-                        /*
-                        read_summary.params[0][m_name_0] = crt_pm_params;
-                        read_summary.params[1][m_name_1] = crt_pm_params;
-                        */
                     } // for m_name[1]
                 } // for m_name[0]
-                assert(opts::scale_select_model_threshold.get() == 0.0);
-                if (true)
+                if (opts::scale_select_model_threshold.get() < INFINITY)
                 {
-                    // note: always select model here if scaling strands together
                     auto it_max = alg::max_of(
                         model_fit,
                         [] (const decltype(model_fit)::value_type& p) { return p.second; });
-                    const auto& m_name_0 = it_max->first.first;
-                    const auto& m_name_1 = it_max->first.second;
-                    auto m_name_str = m_name_0 + '+' + m_name_1;
-                    read_summary.preferred_model[0] = m_name_0;
-                    read_summary.preferred_model[1] = m_name_1;
-                    read_summary.params[0][it_max->first.first] = read_summary.params[2].at(m_name_str);
-                    read_summary.params[1][it_max->first.second] = read_summary.params[2].at(m_name_str);
-                    LOG(debug)
-                        << "selected_model read [" << read_summary.read_id
-                        << "] strand [2] model [" << m_name_str << "]" << endl;
+                    if (alg::all_of(
+                            model_fit,
+                            [&] (const decltype(model_fit)::value_type& p) {
+                                return p.first == it_max->first
+                                    or p.second + opts::scale_select_model_threshold.get() < it_max->second;
+                            }))
+                    {
+                        const auto& m_name_0 = it_max->first.first;
+                        const auto& m_name_1 = it_max->first.second;
+                        auto m_name_str = m_name_0 + '+' + m_name_1;
+                        read_summary.preferred_model[2] = m_name_str;
+                        LOG(debug)
+                            << "selected_model read [" << read_summary.read_id
+                            << "] strand [2] model [" << m_name_str << "]" << endl;
+                    }
                 }
             }
             else // not opts::scale_strands_together
@@ -613,86 +612,162 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
         [&] (unsigned& i, ostringstream& oss) {
             Fast5_Summary_Type& read_summary = reads[i];
             read_summary.load_events(opts::scale_strands_together);
+
+            // compute read statistics used to check scaling
+            array< pair< float, float >, 2 > r_stats;
             for (unsigned st = 0; st < 2; ++st)
             {
                 // if not enough events, ignore strand
                 if (read_summary.events[st].size() < opts::min_read_len) continue;
-                // create list of models to try
-                list< string > model_sublist;
-                if (not read_summary.preferred_model[st].empty())
-                {
-                    // if we have a preferred model, use that
-                    model_sublist.push_back(read_summary.preferred_model[st]);
-                }
-                else
-                {
-                    // no preferred model, try all that apply to this strand
-                    for (const auto& p : models)
-                    {
-                        if (p.second.strand() == st or p.second.strand() == 2)
-                        {
-                            model_sublist.push_back(p.first);
-                        }
-                    }
-                }
-                // check main scaling parameters
-                auto r = alg::mean_stdv_of< float >(
+                r_stats[st] = alg::mean_stdv_of< float >(
                     read_summary.events[st],
                     [] (const Event_Type& ev) { return ev.mean; });
                 LOG(debug)
                     << "mean_stdv read [" << read_summary.read_id
                     << "] strand [" << st
-                    << "] ev_mean=[" << r.first
-                    << "] ev_stdv=[" << r.second << "]" << endl;
-                // deque of results
-                deque< tuple< float, string, string > > results;
-                for (const auto& m_name : model_sublist)
+                    << "] ev_mean=[" << r_stats[st].first
+                    << "] ev_stdv=[" << r_stats[st].second << "]" << endl;
+            }
+
+            // basecalling functor
+            auto basecall_strand = [&] (unsigned st, string m_name, const Pore_Model_Parameters_Type& pm_params) {
+                // scale model
+                Pore_Model_Type pm(models.at(m_name));
+                pm.scale(pm_params);
+                LOG(info)
+                    << "basecalling read [" << read_summary.read_id
+                    << "] strand [" << st
+                    << "] model [" << m_name
+                    << "] parameters " << pm_params << endl;
+                LOG(debug)
+                    << "mean_stdv read [" << read_summary.read_id
+                    << "] strand [" << st
+                    << "] model_mean [" << pm.mean()
+                    << "] model_stdv [" << pm.stdv() << "]" << endl;
+                if (abs(r_stats[st].first - pm.mean()) > 5.0)
                 {
-                    // scale model, initialize default parameters if necessary
-                    Pore_Model_Type pm(models.at(m_name));
-                    Pore_Model_Parameters_Type pm_params = read_summary.params[st].at(m_name);
-                    pm.scale(pm_params);
-                    LOG(info)
-                        << "basecalling read [" << read_summary.read_id
+                    LOG(warning)
+                        << "means_apart read [" << read_summary.read_id
                         << "] strand [" << st
                         << "] model [" << m_name
-                        << "] parameters " << pm_params << endl;
-                    LOG(debug)
-                        << "mean_stdv read [" << read_summary.read_id
-                        << "] strand [" << st
-                        << "] model_mean [" << pm.mean()
-                        << "] model_stdv [" << pm.stdv() << "]" << endl;
-                    if (abs(r.first - pm.mean()) > 5.0)
-                    {
-                        LOG(warning)
-                            << "means_apart read [" << read_summary.read_id
-                            << "] strand [" << st
-                            << "] model [" << m_name
-                            << "] parameters " << read_summary.params[st].at(m_name)
-                            << " model_mean=[" << pm.mean()
-                            << "] events_mean=[" << r.first
-                            << "]" << endl;
-                    }
-                    // correct drift
-                    Event_Sequence_Type corrected_events = read_summary.events[st];
-                    corrected_events.apply_drift_correction(pm_params.drift);
-                    Viterbi_Type vit;
-                    vit.fill(pm, transitions, corrected_events);
-                    results.emplace_back(make_tuple(vit.path_probability(), m_name, vit.base_seq()));
+                        << "] parameters " << pm_params
+                        << " model_mean=[" << pm.mean()
+                        << "] events_mean=[" << r_stats[st].first
+                        << "]" << endl;
                 }
+                // correct drift
+                Event_Sequence_Type corrected_events = read_summary.events[st];
+                corrected_events.apply_drift_correction(pm_params.drift);
+                Viterbi_Type vit;
+                vit.fill(pm, transitions, corrected_events);
+                return std::make_tuple(vit.path_probability(), vit.base_seq());
+            };
+
+            if (opts::scale_strands_together
+                and read_summary.events[0].size() >= opts::min_read_len
+                and read_summary.events[1].size() >= opts::min_read_len)
+            {
+                // create list of models to try
+                list< string > model_sublist;
+                if (not read_summary.preferred_model[2].empty())
+                {
+                    // if we have a preferred model, use that
+                    model_sublist.push_back(read_summary.preferred_model[2]);
+                }
+                else
+                {
+                    // no preferred model, try all for which we have scaling parameters
+                    for (const auto& p : read_summary.params[2])
+                    {
+                        model_sublist.push_back(p.first);
+                    }
+                }
+                // basecall using applicable models
+                deque< tuple< float, float, float, string, string, string, string > > results;
+                for (const auto& m_name_str : model_sublist)
+                {
+                    array< string, 2 > m_name;
+                    auto sep_idx = m_name_str.find('+');
+                    assert(sep_idx != string::npos);
+                    m_name[0] = m_name_str.substr(0, sep_idx);
+                    m_name[1] = m_name_str.substr(sep_idx + 1);
+                    array< tuple< float, string >, 2 > part_results;
+                    for (unsigned st = 0; st < 2; ++st)
+                    {
+                        part_results[st] = basecall_strand(st, m_name[st], read_summary.params[2].at(m_name_str));
+                    }
+                    results.emplace_back(get<0>(part_results[0]) + get<0>(part_results[1]),
+                                         get<0>(part_results[0]),
+                                         get<0>(part_results[1]),
+                                         move(m_name[0]),
+                                         move(m_name[1]),
+                                         move(get<1>(part_results[0])),
+                                         move(get<1>(part_results[1])));
+                }
+                // sort results by first component (log path probability)
                 sort(results.begin(), results.end());
-                string& best_m_name = get<1>(results.back());
-                string& base_seq = get<2>(results.back());
-                LOG(info)
-                    << "best_model read [" << read_summary.read_id
-                    << "] strand [" << st
-                    << "] model [" << best_m_name
-                    << "] parameters " << read_summary.params[st].at(best_m_name) << endl;
-                read_summary.preferred_model[st] = best_m_name;
-                ostringstream tmp;
-                tmp << read_summary.read_id << ":" << read_summary.base_file_name << ":" << st;
-                write_fasta(oss, tmp.str(), base_seq);
-            } // for st
+                array< float, 2 > best_log_path_prob{{ get<1>(results.back()), get<2>(results.back()) }};
+                array< string, 2 > best_m_name{{ get<3>(results.back()), get<4>(results.back()) }};
+                array< const string*, 2 > base_seq_ptr{{ &get<5>(results.back()), &get<6>(results.back()) }};
+                string best_m_name_str = best_m_name[0] + '+' + best_m_name[1];
+                const Pore_Model_Parameters_Type& best_params = read_summary.params[2].at(best_m_name_str);
+                for (unsigned st = 0; st < 2; ++st)
+                {
+                    LOG(info)
+                        << "best_model read [" << read_summary.read_id
+                        << "] strand [" << st
+                        << "] model [" << best_m_name[st]
+                        << "] parameters " << best_params
+                        << " log_path_prob [" << best_log_path_prob[st] << "]" << endl;
+                    read_summary.preferred_model[2] = best_m_name_str;
+                    ostringstream tmp;
+                    tmp << read_summary.read_id << ":" << read_summary.base_file_name << ":" << st;
+                    write_fasta(oss, tmp.str(), *base_seq_ptr[st]);
+                }
+            }
+            else // not opts::scale_strands_together
+            {
+                for (unsigned st = 0; st < 2; ++st)
+                {
+                    // if not enough events, ignore strand
+                    if (read_summary.events[st].size() < opts::min_read_len) continue;
+                    // create list of models to try
+                    list< string > model_sublist;
+                    if (not read_summary.preferred_model[st].empty())
+                    {
+                        // if we have a preferred model, use that
+                        model_sublist.push_back(read_summary.preferred_model[st]);
+                    }
+                    else
+                    {
+                        // no preferred model, try all for which we have scaling
+                        for (const auto& p : read_summary.params[st])
+                        {
+                            model_sublist.push_back(p.first);
+                        }
+                    }
+                    // deque of results
+                    deque< tuple< float, string, string > > results;
+                    for (const auto& m_name : model_sublist)
+                    {
+                        auto r = basecall_strand(st, m_name, read_summary.params[st].at(m_name));
+                        results.emplace_back(get<0>(r), string(m_name), move(get<1>(r)));
+                    }
+                    sort(results.begin(), results.end());
+                    string& best_m_name = get<1>(results.back());
+                    string& base_seq = get<2>(results.back());
+                    LOG(info)
+                        << "best_model read [" << read_summary.read_id
+                        << "] strand [" << st
+                        << "] model [" << best_m_name
+                        << "] parameters " << read_summary.params[st].at(best_m_name)
+                        << " log_path_prob [" << get<0>(results.back()) << "]" << endl;
+                    read_summary.preferred_model[st] = best_m_name;
+                    ostringstream tmp;
+                    tmp << read_summary.read_id << ":" << read_summary.base_file_name << ":" << st;
+                    write_fasta(oss, tmp.str(), base_seq);
+                } // for st
+            }
             read_summary.drop_events();
         },
         // output_chunk
@@ -762,12 +837,6 @@ int main(int argc, char * argv[])
         LOG(error)
             << "invalid scale_select_model_threshold: " << opts::scale_select_model_threshold.get() << endl;
         return EXIT_FAILURE;
-    }
-    if (opts::scale_strands_together and opts::scale_select_model_threshold.get() != 0.0)
-    {
-        LOG(info)
-            << "scale_strands_together requires scale_select_model_threshold == 0.0" << endl;
-        opts::scale_select_model_threshold.get() = 0.0;
     }
     if (opts::scale_select_model_threshold.get() != INFINITY)
     {
