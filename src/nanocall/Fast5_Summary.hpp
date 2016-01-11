@@ -175,7 +175,6 @@ public:
         for (unsigned st = 0; st < 2; ++st)
         {
             events[st].clear();
-            if (strand_bounds[2 * st + 0] == 0) continue;
             for (unsigned j = strand_bounds[2 * st]; j < strand_bounds[2 * st + 1]; ++j)
             {
                 if (filter_ed_event(ed_events[j], abasic_level))
@@ -318,6 +317,11 @@ private:
     // crude detection of strands in event sequence
     void detect_strands()
     {
+        if (ed_events.size() < 50u)
+        {
+            strand_bounds = {{ 0, 0, 0, 0 }};
+            return;
+        }
         strand_bounds = { { 50, static_cast< unsigned >(ed_events.size() - 50), 0, 0 } };
         LOG("Fast5_Summary", debug)
             << "num_events=" << ed_events.size()
