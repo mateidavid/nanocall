@@ -32,16 +32,16 @@ namespace opts
     ValueArg< unsigned > min_read_len("", "min-len", "Minimum read length.", false, 10, "int", cmd_parser);
     ValueArg< unsigned > fasta_line_width("", "fasta-line-width", "Maximum fasta line width.", false, 80, "int", cmd_parser);
     //
-    ValueArg< float > scale_select_model_threshold("", "scale-select-model-threshold", "Select best model per strand during rescaling if log score better by threshold.", false, INFINITY, "float",cmd_parser);
+    ValueArg< float > scale_select_model_threshold("", "scale-select-model-threshold", "Select best model per strand during rescaling if log score better by threshold.", false, 20.0, "float", cmd_parser);
     SwitchArg scale_strands_together("", "scale-strands-together", "Use same scaling parameters for both strands.", cmd_parser);
     ValueArg< float > scale_min_fit_progress("", "scale-min-fit-progress", "Minimum scaling fit progress.", false, 1.0, "float", cmd_parser);
-    ValueArg< unsigned > scale_max_rounds("", "scale-max-rounds", "Maximum scaling rounds.", false, 10, "int", cmd_parser);
+    ValueArg< unsigned > scale_max_rounds("", "scale-max-rounds", "Maximum scaling rounds.", false, 0, "int", cmd_parser);
     ValueArg< unsigned > scale_num_events("", "scale-num-events", "Number of events used for model scaling.", false, 200, "int", cmd_parser);
     SwitchArg scale_only("", "scale-only", "Stop after computing model scalings.", cmd_parser);
     SwitchArg accurate_scaling("", "accurate", "Compute model scalings more accurately.", cmd_parser);
     ValueArg< float > pr_cutoff("", "pr-cutoff", "Minimum value for transition probabilities; smaller values are set to zero.", false, .001, "float", cmd_parser);
-    ValueArg< float > pr_skip("", "pr-skip", "Transition probability of skipping at least 1 state.", false, .1, "float", cmd_parser);
-    ValueArg< float > pr_stay("", "pr-stay", "Transition probability of staying in the same state.", false, .1, "float", cmd_parser);
+    ValueArg< float > pr_skip("", "pr-skip", "Transition probability of skipping at least 1 state.", false, .28, "float", cmd_parser);
+    ValueArg< float > pr_stay("", "pr-stay", "Transition probability of staying in the same state.", false, .09, "float", cmd_parser);
     ValueArg< string > trans_fn("s", "trans", "Custom initial state transitions.", false, "", "file", cmd_parser);
     ValueArg< string > model_fofn("", "model-fofn", "File of pore models.", false, "", "file", cmd_parser);
     MultiArg< string > model_fn("m", "model", "Custom pore model.", false, "file", cmd_parser);
@@ -839,9 +839,18 @@ int main(int argc, char * argv[])
             << "invalid scale_select_model_threshold: " << opts::scale_select_model_threshold.get() << endl;
         return EXIT_FAILURE;
     }
-    if (opts::scale_select_model_threshold.get() != INFINITY)
+    if (opts::scale_max_rounds == 0)
     {
-        opts::accurate_scaling.set(true);
+        opts::scale_max_rounds.get() = (opts::scale_strands_together? 20u : 10u);
+    }
+    LOG(info) << "options rescaling=" << opts::accurate_scaling.get() << endl;
+    if (opts::accurate_scaling)
+    {
+        LOG(info) << "options scale_strands_together=" << opts::scale_strands_together.get()
+                  << " scale_num_events=" << opts::scale_num_events.get()
+                  << " scale_max_rounds=" << opts::scale_max_rounds.get()
+                  << " scale_min_fit_progress=" << opts::scale_min_fit_progress.get()
+                  << " scale_select_model_threshold=" << opts::scale_select_model_threshold.get() << endl;
     }
     return real_main();
 }
