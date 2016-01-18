@@ -32,7 +32,6 @@ public:
     unsigned num_ed_events;
     float sampling_rate;
     float abasic_level;
-    bool have_ed_events;
     bool valid;
 
     static unsigned& min_read_len()
@@ -53,44 +52,71 @@ public:
     void summarize(const std::string& fn, const Pore_Model_Dict_Type& models, bool scale_strands_together)
     {
         valid = true;
+        // initialize fields
         file_name = fn;
         auto pos = file_name.find_last_of('/');
         base_file_name = (pos != std::string::npos? file_name.substr(pos + 1) : file_name);
-        strand_bounds = {{ 0, 0, 0, 0 }};
-        time_length = {{ 0.0, 0.0 }};
         if (base_file_name.substr(base_file_name.size() - 6) == ".fast5")
         {
             base_file_name.resize(base_file_name.size() - 6);
         }
-        fast5::File f(file_name);
-        if (f.have_sampling_rate())
-        {
-            sampling_rate = f.get_sampling_rate();
-        }
-        else
-        {
-            LOG(warning) << fn << ": missing sampling rate; assuming 5000.0" << std::endl;
-            sampling_rate = 5000.0;
-        }
-        have_ed_events = f.have_eventdetection_events();
+        read_id = base_file_name;
+        strand_bounds = {{ 0, 0, 0, 0 }};
+        time_length = {{ 0.0, 0.0 }};
         num_ed_events = 0;
         abasic_level = 0.0;
-        if (have_ed_events)
+        fast5::File f;
+        do
         {
-            load_ed_events(f);
-            auto ed_params = f.get_eventdetection_event_parameters();
-            num_ed_events = ed_events.size();
-            read_id = ed_params.read_id;
-            if (read_id.empty())
+            try
             {
-                read_id = base_file_name;
-            }
-            abasic_level = detect_abasic_level();
-            if (abasic_level > 1.0)
-            {
+                // open file
+                f.open(file_name); // can throw
+                // get sampling rate
+                sampling_rate = f.get_sampling_rate(); // can throw
+                if (sampling_rate < 1000.0 or sampling_rate > 10000.0)
+                {
+                    LOG("Fast5_Summary", warning) << file_name << ": unexpected sampling rate: " << sampling_rate << std::endl;
+                    break;
+                }
+                // get ed events
+                if (not f.have_eventdetection_events())
+                {
+                    LOG("Fast5_Summary", info) << file_name << ": no eventdetection events" << std::endl;
+                    break;
+                }
+                ed_events = f.get_eventdetection_events(); // can throw
+                num_ed_events = ed_events.size();
+                if (num_ed_events < 100 + min_read_len())
+                {
+                    LOG("Fast5_Summary", info) << file_name << ": not enough eventdetection events: " << num_ed_events << std::endl;
+                    num_ed_events = 0;
+                    break;
+                }
+                // get ed event params
+                auto ed_params = f.get_eventdetection_event_parameters(); // can throw
+                if (not ed_params.read_id.empty())
+                {
+                    read_id = ed_params.read_id;
+                }
+                // get abasic level
+                abasic_level = detect_abasic_level();
+                if (abasic_level <= 1.0)
+                {
+                    LOG("Fast5_Summary", info) << file_name << ": abasic level too low: " << abasic_level << std::endl;
+                    num_ed_events = 0;
+                    break;
+                }
+                // detect strands
                 detect_strands();
-                load_events(scale_strands_together);
+                if (strand_bounds[1] <= strand_bounds[0])
+                {
+                    LOG("Fast5_Summary", info) << file_name << ": no template strand detected" << std::endl;
+                    num_ed_events = 0;
+                    break;
+                }
                 // compute time lengths
+                load_events(scale_strands_together, &f);
                 for (unsigned st = 0; st < 2; ++st)
                 {
                     if (events[st].size() < min_read_len()) continue;
@@ -150,31 +176,46 @@ public:
                         }
                     }
                 }
-                ed_events.clear();
-            } // if abasic_level > 1.0
-        } // if have_ed_events
-    }
+            }
+            catch (hdf5_tools::Exception& e)
+            {
+                LOG(warning) << file_name << ": HDF5 error: " << e.what() << std::endl;
+                num_ed_events = 0;
+            }
+        } while (false);
+        drop_events();
+        ed_events.clear();
+    } // summarize
 
-    void load_events(bool scale_strands_together)
+    void load_events(bool scale_strands_together, fast5::File* f_p = nullptr)
     {
         assert(valid);
-        if (not have_ed_events)
+        drop_events();
+        if (num_ed_events == 0)
         {
             return;
         }
-        if (ed_events.empty())
+        bool must_load_ed_events = ed_events.empty();
+        if (must_load_ed_events)
         {
 #ifndef H5_HAVE_THREADSAFE
             static std::mutex fast5_mutex;
             std::lock_guard< std::mutex > fast5_lock(fast5_mutex);
 #endif
-            fast5::File f(file_name);
-            load_ed_events(f);
-            f.close();
+            bool must_open_file = not f_p;
+            if (must_open_file)
+            {
+                f_p = new fast5::File(file_name);
+            }
+            assert(f_p->is_open());
+            ed_events = f_p->get_eventdetection_events();
+            if (must_open_file)
+            {
+                delete f_p;
+            }
         }
         for (unsigned st = 0; st < 2; ++st)
         {
-            events[st].clear();
             for (unsigned j = strand_bounds[2 * st]; j < strand_bounds[2 * st + 1]; ++j)
             {
                 if (filter_ed_event(ed_events[j], abasic_level))
@@ -189,7 +230,10 @@ public:
                 }
             }
         }
-        ed_events.clear();
+        if (must_load_ed_events)
+        {
+            ed_events.clear();
+        }
     }
     void drop_events()
     {
@@ -204,12 +248,11 @@ public:
         os << "[base_file_name=" << fs.base_file_name << " valid=" << fs.valid;
         if (fs.valid)
         {
-            os << " have_ed_events=" << fs.have_ed_events;
-            if (fs.have_ed_events)
+            os << " num_ed_events=" << fs.num_ed_events;
+            if (fs.num_ed_events > 0)
             {
                 os << " read_id=" << fs.read_id
                    << " abasic_level=" << fs.abasic_level
-                   << " num_ed_events=" << fs.num_ed_events
                    << " strand_bounds=[" << fs.strand_bounds[0] << ","
                    << fs.strand_bounds[1] << ","
                    << fs.strand_bounds[2] << ","
@@ -240,7 +283,6 @@ public:
 
     void write_tsv(std::ostream& os) const
     {
-        assert(have_ed_events);
         os << base_file_name << '\t' << read_id << '\t' << num_ed_events << '\t' << abasic_level
            << '\t' << strand_bounds[0] << '\t' << strand_bounds[1]
            << '\t' << strand_bounds[2] << '\t' << strand_bounds[3];
@@ -317,9 +359,8 @@ private:
     // crude detection of strands in event sequence
     void detect_strands()
     {
-        if (ed_events.size() < 50u)
+        if (ed_events.size() < 100u)
         {
-            strand_bounds = {{ 0, 0, 0, 0 }};
             return;
         }
         strand_bounds = { { 50, static_cast< unsigned >(ed_events.size() - 50), 0, 0 } };

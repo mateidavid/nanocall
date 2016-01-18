@@ -234,6 +234,7 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
         // process item
         [&] (unsigned& i) {
             Fast5_Summary_Type& read_summary = reads[i];
+            if (read_summary.num_ed_events == 0) return;
             read_summary.load_events(opts::scale_strands_together);
             //
             // create per-strand list of models to try
@@ -611,6 +612,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
         // process_item
         [&] (unsigned& i, ostringstream& oss) {
             Fast5_Summary_Type& read_summary = reads[i];
+            if (read_summary.num_ed_events == 0) return;
             read_summary.load_events(opts::scale_strands_together);
 
             // compute read statistics used to check scaling
