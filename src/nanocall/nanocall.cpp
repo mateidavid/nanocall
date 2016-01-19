@@ -817,6 +817,7 @@ int real_main()
             ofs << endl;
         }
     }
+    assert(fast5::File::get_object_count() == 0);
     return EXIT_SUCCESS;
 }
 
