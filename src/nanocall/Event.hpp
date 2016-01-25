@@ -48,9 +48,9 @@ public:
 
 template < typename Float_Type = float >
 struct Event_Sequence
-    : std::vector< Event< Float_Type > >
+    : std::deque< Event< Float_Type > >
 {
-    typedef std::vector< Event< Float_Type > > Base;
+    typedef std::deque< Event< Float_Type > > Base;
     using Base::Base;
     void apply_drift_correction(Float_Type drift)
     {

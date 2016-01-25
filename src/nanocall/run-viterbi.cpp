@@ -27,7 +27,7 @@ void real_main()
 {
     Pore_Model<> pm;
     State_Transitions<> st;
-    vector< Event<> > ev;
+    Event_Sequence<> ev;
     zstr::ifstream(opts::pm_file_name) >> pm;
     zstr::ifstream(opts::st_file_name) >> st;
     {
