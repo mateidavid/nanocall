@@ -4,6 +4,7 @@
 #include <array>
 #include <string>
 #include <vector>
+#include <memory>
 
 #ifndef H5_HAVE_THREADSAFE
 #include <mutex>
@@ -34,16 +35,40 @@ public:
     float abasic_level;
     bool valid;
 
+    // from fast5 file
+    std::unique_ptr< std::vector< fast5::EventDetection_Event_Entry > > ed_events_ptr;
+    // filtered
+    std::array< std::unique_ptr< Event_Sequence_Type >, 2 > events_ptr;
+    //std::array< Event_Sequence_Type, 2 > events;
+
+    const std::vector< fast5::EventDetection_Event_Entry >& ed_events() const
+    {
+        assert(ed_events_ptr);
+        return *ed_events_ptr;
+    }
+    std::vector< fast5::EventDetection_Event_Entry >& ed_events()
+    {
+        assert(ed_events_ptr);
+        return *ed_events_ptr;
+    }
+    const Event_Sequence_Type& events(unsigned st) const
+    {
+        assert(st < 2);
+        assert(events_ptr[st]);
+        return *events_ptr[st];
+    }
+    Event_Sequence_Type& events(unsigned st)
+    {
+        assert(st < 2);
+        assert(events_ptr[st]);
+        return *events_ptr[st];
+    }
+
     static unsigned& min_read_len()
     {
         static unsigned _min_read_len = 1000;
         return _min_read_len;
     }
-
-    // from fast5 file
-    std::vector< fast5::EventDetection_Event_Entry > ed_events;
-    // filtered
-    std::array< Event_Sequence_Type, 2 > events;
 
     Fast5_Summary() : valid(false) {}
     Fast5_Summary(const std::string fn, const Pore_Model_Dict_Type& models, bool scale_strands_together)
@@ -85,8 +110,8 @@ public:
                     LOG("Fast5_Summary", info) << file_name << ": no eventdetection events" << std::endl;
                     break;
                 }
-                ed_events = f.get_eventdetection_events(); // can throw
-                num_ed_events = ed_events.size();
+                load_ed_events(&f);
+                num_ed_events = ed_events().size();
                 if (num_ed_events < 100 + min_read_len())
                 {
                     LOG("Fast5_Summary", info) << file_name << ": not enough eventdetection events: " << num_ed_events << std::endl;
@@ -119,21 +144,21 @@ public:
                 load_events(scale_strands_together, &f);
                 for (unsigned st = 0; st < 2; ++st)
                 {
-                    if (events[st].size() < min_read_len()) continue;
-                    time_length[st] = events[st].rbegin()->start + events[st].rbegin()->length;
+                    if (events(st).size() < min_read_len()) continue;
+                    time_length[st] = events(st).rbegin()->start + events(st).rbegin()->length;
                 }
                 //
                 // compute initial model scalings
                 //
                 if (scale_strands_together
-                    and events[0].size() >= min_read_len()
-                    and events[1].size() >= min_read_len())
+                    and events(0).size() >= min_read_len()
+                    and events(1).size() >= min_read_len())
                 {
                     auto r0 = alg::mean_stdv_of< Float_Type >(
-                        events[0],
+                        events(0),
                         [] (const Event_Type& ev) { return ev.mean; });
                     auto r1 = alg::mean_stdv_of< Float_Type >(
-                        events[1],
+                        events(1),
                         [] (const Event_Type& ev) { return ev.mean; });
                     for (const auto& p0 : models)
                         if (p0.second.strand() == 0 or p0.second.strand() == 2)
@@ -157,9 +182,9 @@ public:
                 {
                     for (unsigned st = 0; st < 2; ++st)
                     {
-                        if (events[st].size() < min_read_len()) continue;
+                        if (events(st).size() < min_read_len()) continue;
                         auto r = alg::mean_stdv_of< Float_Type >(
-                            events[st],
+                            events(st),
                             [] (const Event_Type& ev) { return ev.mean; });
                         for (const auto& p : models)
                         {
@@ -184,7 +209,7 @@ public:
             }
         } while (false);
         drop_events();
-        ed_events.clear();
+        ed_events_ptr.reset();
     } // summarize
 
     void load_events(bool scale_strands_together, fast5::File* f_p = nullptr)
@@ -195,7 +220,7 @@ public:
         {
             return;
         }
-        bool must_load_ed_events = ed_events.empty();
+        bool must_load_ed_events = not ed_events_ptr;
         if (must_load_ed_events)
         {
 #ifndef H5_HAVE_THREADSAFE
@@ -208,7 +233,7 @@ public:
                 f_p = new fast5::File(file_name);
             }
             assert(f_p->is_open());
-            ed_events = f_p->get_eventdetection_events();
+            load_ed_events(f_p);
             if (must_open_file)
             {
                 delete f_p;
@@ -216,30 +241,31 @@ public:
         }
         for (unsigned st = 0; st < 2; ++st)
         {
+            events_ptr[st] = typename decltype(events_ptr)::value_type(new typename decltype(events_ptr)::value_type::element_type ());
             for (unsigned j = strand_bounds[2 * st]; j < strand_bounds[2 * st + 1]; ++j)
             {
-                if (filter_ed_event(ed_events[j], abasic_level))
+                if (filter_ed_event(ed_events()[j], abasic_level))
                 {
                     Event_Type e;
-                    e.mean = ed_events[j].mean;
-                    e.stdv = ed_events[j].stdv;
-                    e.start = (ed_events[j].start - ed_events[strand_bounds[scale_strands_together? 0 : 2 * st]].start) / sampling_rate;
-                    e.length = ed_events[j].length / sampling_rate;
+                    e.mean = ed_events()[j].mean;
+                    e.stdv = ed_events()[j].stdv;
+                    e.start = (ed_events()[j].start - ed_events()[strand_bounds[scale_strands_together? 0 : 2 * st]].start) / sampling_rate;
+                    e.length = ed_events()[j].length / sampling_rate;
                     e.update_logs();
-                    events[st].push_back(e);
+                    events(st).emplace_back(std::move(e));
                 }
             }
         }
         if (must_load_ed_events)
         {
-            ed_events.clear();
+            ed_events_ptr.reset();
         }
     }
     void drop_events()
     {
         for (unsigned st = 0; st < 2; ++st)
         {
-            events[st].clear();
+            events_ptr[st].reset();
         }
     }
 
@@ -301,16 +327,15 @@ public:
     }
 
 private:
-    void load_ed_events(fast5::File& f)
+    void load_ed_events(fast5::File* f_p)
     {
-        ed_events = f.get_eventdetection_events();
-        auto ed_params = f.get_eventdetection_event_parameters();
+        ed_events_ptr = decltype(ed_events_ptr)(new typename decltype(ed_events_ptr)::element_type(f_p->get_eventdetection_events()));
     }
 
     // crude detection of abasic level
     Float_Type detect_abasic_level()
     {
-        if (ed_events.size() < min_read_len())
+        if (ed_events().size() < min_read_len())
         {
             return 0.0;
         }
@@ -318,11 +343,11 @@ private:
         // use 1.0 pA + max level excluding to 5%
         //
         std::vector< Float_Type > s;
-        s.resize(ed_events.size());
+        s.resize(ed_events().size());
         unsigned i;
-        for (i = 0; i < ed_events.size(); ++i)
+        for (i = 0; i < ed_events().size(); ++i)
         {
-            s[i] = ed_events[i].mean;
+            s[i] = ed_events()[i].mean;
         }
         std::sort(s.begin(), s.end());
         return s[99 * s.size() / 100] + 5.0f;
@@ -331,7 +356,7 @@ private:
     // crude detection of abasic level
     Float_Type detect_abasic_level_2()
     {
-        if (ed_events.size() < min_read_len())
+        if (ed_events().size() < min_read_len())
         {
             return 0.0;
         }
@@ -340,11 +365,11 @@ private:
         // such that the next peak below it is more than 1pA lower
         //
         std::vector< Float_Type > s;
-        s.resize(ed_events.size());
+        s.resize(ed_events().size());
         unsigned i;
-        for (i = 0; i < ed_events.size(); ++i)
+        for (i = 0; i < ed_events().size(); ++i)
         {
-            s[i] = ed_events[i].mean;
+            s[i] = ed_events()[i].mean;
         }
         std::sort(s.begin(), s.end());
         i = s.size() / 2;
@@ -359,25 +384,25 @@ private:
     // crude detection of strands in event sequence
     void detect_strands()
     {
-        if (ed_events.size() < 100u)
+        if (ed_events().size() < 100u)
         {
             return;
         }
-        strand_bounds = { { 50, static_cast< unsigned >(ed_events.size() - 50), 0, 0 } };
+        strand_bounds = { { 50, static_cast< unsigned >(ed_events().size() - 50), 0, 0 } };
         LOG("Fast5_Summary", debug)
-            << "num_events=" << ed_events.size()
+            << "num_events=" << ed_events().size()
             << " abasic_level=" << abasic_level << std::endl;
         //
         // find islands of >= 5 consecutive events at high level
         //
         std::vector< std::pair< unsigned, unsigned > > islands;
         unsigned i = 0;
-        while (i < ed_events.size())
+        while (i < ed_events().size())
         {
-            if (ed_events[i].mean >= abasic_level)
+            if (ed_events()[i].mean >= abasic_level)
             {
                 unsigned j = i + 1;
-                while (j < ed_events.size() and ed_events[j].mean >= abasic_level) ++j;
+                while (j < ed_events().size() and ed_events()[j].mean >= abasic_level) ++j;
                 if (j - i >= 5)
                 {
                     islands.push_back(std::make_pair(i, j));
@@ -423,12 +448,12 @@ private:
         // pick island closest to the middle of the event sequence
         //
         auto dist_to_middle = [&] (const std::pair< unsigned, unsigned >& p) {
-            return std::min((unsigned)std::abs((long)p.first - (long)ed_events.size() / 2),
-                            (unsigned)std::abs((long)p.second - (long)ed_events.size() / 2));
+            return std::min((unsigned)std::abs((long)p.first - (long)ed_events().size() / 2),
+                            (unsigned)std::abs((long)p.second - (long)ed_events().size() / 2));
         };
         auto it = alg::min_of(islands, dist_to_middle);
         // check island is in the middle third; if not, intepret it as template only
-        if (dist_to_middle(*it) > ed_events.size() / 6)
+        if (dist_to_middle(*it) > ed_events().size() / 6)
         {
             LOG("Fast5_Summary", info)
                 << "drop_read read_id=[" << read_id
@@ -453,8 +478,8 @@ private:
             }
             strand_bounds[1] = it->first - 50;
             strand_bounds[2] = it->first + 50;
-            strand_bounds[3] = ed_events.size() - 50;
-            if (islands[islands.size() - 1].second > ed_events.size() - 100)
+            strand_bounds[3] = ed_events().size() - 50;
+            if (islands[islands.size() - 1].second > ed_events().size() - 100)
             {
                 strand_bounds[3] = std::min(strand_bounds[3], islands[islands.size() - 1].first);
             }

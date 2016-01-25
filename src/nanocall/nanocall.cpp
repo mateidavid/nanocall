@@ -243,7 +243,7 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
             for (unsigned st = 0; st < 2; ++st)
             {
                 // if not enough events, ignore strand
-                if (read_summary.events[st].size() < opts::min_read_len) continue;
+                if (read_summary.events(st).size() < opts::min_read_len) continue;
                 // create list of models to try
                 if (not read_summary.preferred_model[st].empty())
                 {
@@ -270,17 +270,17 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
             for (unsigned st = 0; st < 2; ++st)
             {
                 // if not enough events, ignore strand
-                if (read_summary.events[st].size() < opts::min_read_len) continue;
+                if (read_summary.events(st).size() < opts::min_read_len) continue;
                 // create 2 event sequences on which to train
-                unsigned n_events = min((size_t)opts::scale_num_events.get(), read_summary.events[st].size());
+                unsigned n_events = min((size_t)opts::scale_num_events.get(), read_summary.events(st).size());
                 train_event_seqs[st].emplace_back(
-                    read_summary.events[st].begin(), read_summary.events[st].begin() + n_events / 2);
+                    read_summary.events(st).begin(), read_summary.events(st).begin() + n_events / 2);
                 train_event_seqs[st].emplace_back(
-                    read_summary.events[st].end() - n_events / 2, read_summary.events[st].end());
+                    read_summary.events(st).end() - n_events / 2, read_summary.events(st).end());
             }
             if (opts::scale_strands_together
-                and read_summary.events[0].size() >= opts::min_read_len
-                and read_summary.events[1].size() >= opts::min_read_len)
+                and read_summary.events(0).size() >= opts::min_read_len
+                and read_summary.events(1).size() >= opts::min_read_len)
             {
                 // prepare vector of event sequences
                 vector< const Event_Sequence_Type* > train_event_seq_ptrs;
@@ -437,7 +437,7 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                 for (unsigned st = 0; st < 2; ++st)
                 {
                     // if not enough events, ignore strand
-                    if (read_summary.events[st].size() < opts::min_read_len) continue;
+                    if (read_summary.events(st).size() < opts::min_read_len) continue;
                     // prepare vector of event sequences
                     vector< const Event_Sequence_Type* > train_event_seq_ptrs;
                     for (const auto& events : train_event_seqs[st])
@@ -620,9 +620,9 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
             for (unsigned st = 0; st < 2; ++st)
             {
                 // if not enough events, ignore strand
-                if (read_summary.events[st].size() < opts::min_read_len) continue;
+                if (read_summary.events(st).size() < opts::min_read_len) continue;
                 r_stats[st] = alg::mean_stdv_of< float >(
-                    read_summary.events[st],
+                    read_summary.events(st),
                     [] (const Event_Type& ev) { return ev.mean; });
                 LOG(debug)
                     << "mean_stdv read [" << read_summary.read_id
@@ -658,7 +658,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                         << "]" << endl;
                 }
                 // correct drift
-                Event_Sequence_Type corrected_events = read_summary.events[st];
+                Event_Sequence_Type corrected_events = read_summary.events(st);
                 corrected_events.apply_drift_correction(pm_params.drift);
                 Viterbi_Type vit;
                 vit.fill(pm, transitions, corrected_events);
@@ -666,8 +666,8 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
             };
 
             if (opts::scale_strands_together
-                and read_summary.events[0].size() >= opts::min_read_len
-                and read_summary.events[1].size() >= opts::min_read_len)
+                and read_summary.events(0).size() >= opts::min_read_len
+                and read_summary.events(1).size() >= opts::min_read_len)
             {
                 // create list of models to try
                 list< string > model_sublist;
@@ -733,7 +733,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                 for (unsigned st = 0; st < 2; ++st)
                 {
                     // if not enough events, ignore strand
-                    if (read_summary.events[st].size() < opts::min_read_len) continue;
+                    if (read_summary.events(st).size() < opts::min_read_len) continue;
                     // create list of models to try
                     list< string > model_sublist;
                     if (not read_summary.preferred_model[st].empty())
