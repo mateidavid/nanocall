@@ -9,8 +9,11 @@
 #include "State_Transitions.hpp"
 #include "Forward_Backward.hpp"
 #include "logsumset.hpp"
-#include "logdiff.hpp"
 #include "logger.hpp"
+
+#if defined(USE_LOGDIFF)
+#include "logdiff.hpp"
+#endif
 
 template < typename Float_Type = float, unsigned Kmer_Size = 6 >
 struct Model_Parameter_Trainer
@@ -197,12 +200,14 @@ struct Model_Parameter_Trainer
         }
 #endif
         // finally, solve for var
+        LogSumSet_Type s{false};
+#if defined(USE_LOGDIFF)
         float new_pm_params_log_abs_shift = std::log(std::abs(new_pm_params.shift));
         float new_pm_params_log_scale = std::log(new_pm_params.scale);
         float new_pm_params_log_abs_drift = std::log(std::abs(new_pm_params.drift));
-        LogSumSet_Type s{false};
-#ifdef CHECK_LOGDIFF
+#if defined(CHECK_LOGDIFF)
         LogSumSet_Type s2{false};
+#endif
 #endif
         for (unsigned k = 0; k < n_event_seqs; ++k)
         {
@@ -214,41 +219,32 @@ struct Model_Parameter_Trainer
                 for (unsigned j = 0; j < Pore_Model_Type::n_states; ++j)
                 {
                     float x = fwbw[k].log_posterior(i, j) - 2 * pm.state(j).log_level_stdv;
-
-                    LogSumSet_Type s_a{false};
-                    LogSumSet_Type s_b{false};
-                    s_a.add(events[i].log_mean);
-                    s_b.add(new_pm_params_log_scale + pm.state(j).log_level_mean);
-                    if (new_pm_params.shift > 0)
-                    {
-                        s_b.add(new_pm_params_log_abs_shift);
-                    }
-                    else
-                    {
-                        s_a.add(new_pm_params_log_abs_shift);
-                    }
-                    if (new_pm_params.drift > 0)
-                    {
-                        s_b.add(new_pm_params_log_abs_drift + events[i].log_start);
-                    }
-                    else
-                    {
-                        s_a.add(new_pm_params_log_abs_drift + events[i].log_start);
-                    }
-                    float y = logdiff::LogDiff(s_a.val(), s_b.val());
-                    s.add(x + 2 * y);
-#ifdef CHECK_LOGDIFF
-                    float y2 =
+#if !defined(USE_LOGDIFF) || defined(CHECK_LOGDIFF)
+                    float y =
                         std::log(std::abs(events[i].mean
                                           - new_pm_params.shift
                                           - new_pm_params.scale * pm.state(j).level_mean
                                           - new_pm_params.drift * events[i].start));
-                    s2.add(x + 2 * y2);
+#endif
+#if defined(USE_LOGDIFF)
+                    float a = events[i].log_mean;
+                    float b = new_pm_params_log_scale + pm.state(j).log_level_mean;
+                    float& shift_contrib = (new_pm_params.shift > 0? b : a);
+                    shift_contrib = logsum::p7_FLogsum(shift_contrib, new_pm_params_log_abs_shift);
+                    float& drift_contrib = (new_pm_params.drift > 0? b : a);
+                    drift_contrib = logsum::p7_FLogsum(drift_contrib, new_pm_params_log_abs_drift + events[i].log_start);
+                    float y2 = logdiff::LogDiff(a, b);
+                    s.add(x + 2 * y2);
+#if defined(CHECK_LOGDIFF)
+                    s2.add(x + 2 * y);
+#endif
+#else
+                    s.add(x + 2 * y);
 #endif
                 }
             }
         }
-#ifdef CHECK_LOGDIFF
+#if defined(CHECK_LOGDIFF)
         LOG(debug)
             << "logdiff:"
             << " var=" << std::sqrt(std::exp(s.val()) / total_num_events)
