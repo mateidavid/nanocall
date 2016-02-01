@@ -196,7 +196,7 @@ struct Model_Parameter_Trainer
             float x = A_copy[i][0] * new_pm_params.shift
                 + A_copy[i][1] * new_pm_params.scale
                 + A_copy[i][2] * new_pm_params.drift;
-            assert((x - B_copy[i])/std::max(x, B_copy[i]) < 1e-5);
+            assert((x - B_copy[i])/std::max(x, B_copy[i]) < 1e-3);
         }
 #endif
         // finally, solve for var
