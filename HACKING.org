@@ -1,5 +1,9 @@
 # -*- mode:org; mode:visual-line; coding:utf-8; -*-
 
+**** Change build type
+
+The default build type is =Release= (optimizations, no assertions). If any crashes are experienced, the first step in addressing them is to redo the run with a =Test= (optimizations, assertions) or =Debug= (no optimizations, assertions) build type. This is achieved using, e.g. =-DCMAKE_BUILD_TYPE=Test=.
+
 **** Using other packaged tools
 
 *Note*: The various tools are only built in =Test= or =Debug= build types.

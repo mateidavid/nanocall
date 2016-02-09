@@ -4,9 +4,9 @@
 
 **** Installation
 
-Nanocall can be built from source in a classical Linux environment, or directly under [[https://www.docker.com/what-docker][Docker]]. The Docker build might be able to run under Windows, though this is not tested.
+Nanocall can be built from source in a classical UNIX environment, or directly under [[https://www.docker.com/what-docker][Docker]]. The Docker build might run under Windows, though this is not tested.
 
-***** Under a Classical Linux Environment
+***** Under a Classical UNIX Environment
 
 Nanocall uses =cmake= for configuration and =make= for building. The prerequisites needed for building are =zlib= and =hdf5=. On UNIX systems, =hdf5= can be optionally built as a submodule.
 Example build:
@@ -29,8 +29,6 @@ make install
 - Setting =BUILD_HDF5= will cause =hdf5= to be downloaded and built as a submodule.
 
 - Setting =HDF5_ROOT= is only necessary if a copy of =hdf5= is installed in a non-standard location. This is not needed when =BUILD_HDF5= is used.
-
-- The default build type is =Release= (optimizations, no assertions). If any crashes are experienced, the first step in addressing them is to redo the run with a =Test= (optimizations, assertions) or =Debug= (no optimizations, assertions) build type. This is achieved using, e.g. =-DCMAKE_BUILD_TYPE=Test=.
 
 ***** Under Docker
 
