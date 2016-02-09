@@ -1,0 +1,17 @@
+# -*- mode:org; mode:visual-line; coding:utf-8; -*-
+
+**** Using other packaged tools
+
+*Note*: The various tools are only built in =Test= or =Debug= build types.
+
+#+BEGIN_EXAMPLE
+FAST5_FILE=$SIMPSONLAB/data/nanopore/ecoli/sqk006/pass/LomanLabz_PC_Ecoli_K12_MG1655_20150924_MAP006_1_5005_1_ch9_file72_strand.fast5
+nanocall ${FAST5_FILE} > ${FAST5_FILE}.fa
+compute-state-transitions -p .001 -t .1 -k .1 >transitions.tsv
+compute-scaled-pore-model -f $FAST5_FILE >model.tsv
+get_events $FAST5_FILE | egrep -v '^(#|mean)' | tawk '{print $1,$3,$2,$4}' >events.tsv
+run-viterbi -d info -p model.tsv -s transitions.tsv -e events.tsv | { echo ">$(basename $FAST5_FILE)"; cat; } >out.fa
+run-viterbi -d debug -p model.tsv -s transitions.tsv -e <(awk 'NR>=100 && NR<200' events.tsv) |& tee log
+run-fwbw -d info -p model.tsv -s transitions.tsv -e <(awk 'NR>=100 && NR<200' events.tsv) -o fwbw.tsv
+#+END_EXAMPLE
+
