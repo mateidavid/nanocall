@@ -10,6 +10,7 @@ target_link_libraries(nanocall
     ${CMAKE_DL_LIBS}
     ${ZLIB_LIBRARIES}
     )
+install(TARGETS nanocall RUNTIME DESTINATION bin)
 
 if(NOT ${CMAKE_BUILD_TYPE} STREQUAL "Release")
     add_executable(compute-state-transitions compute-state-transitions.cpp)
