@@ -35,7 +35,7 @@ namespace opts
     ValueArg< float > scale_select_model_threshold("", "scale-select-model-threshold", "Select best model per strand during rescaling if log score better by threshold.", false, 20.0, "float", cmd_parser);
     SwitchArg scale_strands_together("", "scale-strands-together", "Use same scaling parameters for both strands.", cmd_parser);
     ValueArg< float > scale_min_fit_progress("", "scale-min-fit-progress", "Minimum scaling fit progress.", false, 1.0, "float", cmd_parser);
-    ValueArg< unsigned > scale_max_rounds("", "scale-max-rounds", "Maximum scaling rounds.", false, 0, "int", cmd_parser);
+    ValueArg< unsigned > scale_max_rounds("", "scale-max-rounds", "Maximum scaling rounds.", false, 10, "int", cmd_parser);
     ValueArg< unsigned > scale_num_events("", "scale-num-events", "Number of events used for model scaling.", false, 200, "int", cmd_parser);
     SwitchArg scale_only("", "scale-only", "Stop after computing model scalings.", cmd_parser);
     SwitchArg accurate_scaling("", "accurate", "Compute model scalings more accurately.", cmd_parser);
@@ -394,7 +394,7 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
 
                             ++round;
                             // stop condition
-                            if (round >= opts::scale_max_rounds
+                            if (round >= 2u * opts::scale_max_rounds
                                 or (round > 1 and crt_fit < old_fit + opts::scale_min_fit_progress))
                             {
                                 break;
@@ -841,10 +841,6 @@ int main(int argc, char * argv[])
         LOG(error)
             << "invalid scale_select_model_threshold: " << opts::scale_select_model_threshold.get() << endl;
         return EXIT_FAILURE;
-    }
-    if (opts::scale_max_rounds == 0)
-    {
-        opts::scale_max_rounds.get() = (opts::scale_strands_together? 20u : 10u);
     }
     LOG(info) << "options rescaling=" << opts::accurate_scaling.get() << endl;
     if (opts::accurate_scaling)
