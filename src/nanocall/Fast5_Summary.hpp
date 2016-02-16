@@ -70,6 +70,12 @@ public:
         return _min_read_len;
     }
 
+    static unsigned& max_read_len()
+    {
+        static unsigned _max_read_len = 50000;
+        return _max_read_len;
+    }
+
     Fast5_Summary() : valid(false) {}
     Fast5_Summary(const std::string fn, const Pore_Model_Dict_Type& models, bool scale_strands_together)
         : valid(false) { summarize(fn, models, scale_strands_together); }
@@ -115,6 +121,12 @@ public:
                 if (num_ed_events < 100 + min_read_len())
                 {
                     LOG("Fast5_Summary", info) << file_name << ": not enough eventdetection events: " << num_ed_events << std::endl;
+                    num_ed_events = 0;
+                    break;
+                }
+                if (num_ed_events > max_read_len())
+                {
+                    LOG("Fast5_Summary", info) << file_name << ": too many eventdetection events: " << num_ed_events << std::endl;
                     num_ed_events = 0;
                     break;
                 }
