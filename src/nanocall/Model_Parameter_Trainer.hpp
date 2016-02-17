@@ -25,13 +25,51 @@ struct Model_Parameter_Trainer
     typedef Event_Sequence< Float_Type > Event_Sequence_Type;
     typedef Forward_Backward< Float_Type, Kmer_Size > Forward_Backward_Type;
     typedef logsum::logsumset< Float_Type > LogSumSet_Type;
+    static const unsigned n_states = Pore_Model_Type::n_states;
+
+    static void init()
+    {
+        // pick states i s.t. i has self-overlap 0, and all its 1-step neighbours
+        // have self-overlap <=1
+        st_train_kmers().clear();
+        for (unsigned i = 0; i < n_states; ++i)
+        {
+            if (Kmer_Type::max_self_overlap(i) > 0)
+            {
+                continue;
+            }
+            bool all_good = true;
+            for (unsigned b1 = 0; b1 < 4; ++b1)
+            {
+                unsigned j = (Kmer_Type::suffix(i, Kmer_Size - 1) << 2) + b1;
+                if (Kmer_Type::max_self_overlap(j) > 1)
+                {
+                    all_good = false;
+                    break;
+                }
+            }
+            if (all_good)
+            {
+                st_train_kmers().push_back(i);
+            }
+        }
+        LOG(info) << "using [" << st_train_kmers().size() << "] states for state trainsition training" << std::endl;
+    }
+
+    static std::vector< unsigned >& st_train_kmers()
+    {
+        static std::vector< unsigned > _st_train_kmers;
+        return _st_train_kmers;
+    }
 
     static void train_one_round(
         const std::vector< const Event_Sequence_Type* >& event_seq_ptrs,
         const std::vector< const Pore_Model_Type* >& model_ptrs,
-        const State_Transitions_Type& transitions,
+        const State_Transitions_Type& default_transitions,
         const Pore_Model_Parameters_Type& crt_pm_params,
+        const State_Transition_Parameters_Type& crt_st_params,
         Pore_Model_Parameters_Type& new_pm_params,
+        State_Transition_Parameters_Type& new_st_params,
         Float_Type& new_fit,
         bool& done)
     {
@@ -51,6 +89,14 @@ struct Model_Parameter_Trainer
             scaled_pm_map.emplace(std::make_pair(pm_p, *pm_p));
             scaled_pm_map[pm_p].scale(crt_pm_params);
         }
+        State_Transitions_Type custom_transitions;
+        if (not crt_st_params.is_default())
+        {
+            custom_transitions.compute_transitions_fast(crt_st_params);
+        }
+        const State_Transitions_Type& transitions = (crt_st_params.is_default()
+                                                     ? default_transitions
+                                                     : custom_transitions);
         std::vector< Event_Sequence_Type > corrected_event_seqs(n_event_seqs);
         std::vector< Forward_Backward_Type > fwbw(n_event_seqs);
         new_fit = 0;
@@ -199,60 +245,142 @@ struct Model_Parameter_Trainer
             assert((x - B_copy[i])/std::max(x, B_copy[i]) < 1e-3);
         }
 #endif
+        //
         // finally, solve for var
-        LogSumSet_Type s{false};
-#if defined(USE_LOGDIFF)
-        float new_pm_params_log_abs_shift = std::log(std::abs(new_pm_params.shift));
-        float new_pm_params_log_scale = std::log(new_pm_params.scale);
-        float new_pm_params_log_abs_drift = std::log(std::abs(new_pm_params.drift));
-#if defined(CHECK_LOGDIFF)
-        LogSumSet_Type s2{false};
-#endif
-#endif
-        for (unsigned k = 0; k < n_event_seqs; ++k)
+        //
         {
-            const Event_Sequence_Type& events = *event_seq_ptrs[k];
-            const Pore_Model_Type& pm = *model_ptrs[single_model? 0 : k];
-            unsigned n_events = events.size();
-            for (unsigned i = 0; i < n_events; ++i)
+            LogSumSet_Type s(false);
+#if defined(USE_LOGDIFF)
+            float new_pm_params_log_abs_shift = std::log(std::abs(new_pm_params.shift));
+            float new_pm_params_log_scale = std::log(new_pm_params.scale);
+            float new_pm_params_log_abs_drift = std::log(std::abs(new_pm_params.drift));
+#if defined(CHECK_LOGDIFF)
+            LogSumSet_Type s2(false);
+#endif
+#endif
+            for (unsigned k = 0; k < n_event_seqs; ++k)
             {
-                for (unsigned j = 0; j < Pore_Model_Type::n_states; ++j)
+                const Event_Sequence_Type& events = *event_seq_ptrs[k];
+                const Pore_Model_Type& pm = *model_ptrs[single_model? 0 : k];
+                unsigned n_events = events.size();
+                for (unsigned i = 0; i < n_events; ++i)
                 {
-                    float x = fwbw[k].log_posterior(i, j) - 2 * pm.state(j).log_level_stdv;
+                    for (unsigned j = 0; j < Pore_Model_Type::n_states; ++j)
+                    {
+                        float x = fwbw[k].log_posterior(i, j) - 2 * pm.state(j).log_level_stdv;
 #if !defined(USE_LOGDIFF) || defined(CHECK_LOGDIFF)
-                    float y =
-                        std::log(std::abs(events[i].mean
-                                          - new_pm_params.shift
-                                          - new_pm_params.scale * pm.state(j).level_mean
-                                          - new_pm_params.drift * events[i].start));
+                        float y =
+                            std::log(std::abs(events[i].mean
+                                              - new_pm_params.shift
+                                              - new_pm_params.scale * pm.state(j).level_mean
+                                              - new_pm_params.drift * events[i].start));
 #endif
 #if defined(USE_LOGDIFF)
-                    float a = events[i].log_mean;
-                    float b = new_pm_params_log_scale + pm.state(j).log_level_mean;
-                    float& shift_contrib = (new_pm_params.shift > 0? b : a);
-                    shift_contrib = logsum::p7_FLogsum(shift_contrib, new_pm_params_log_abs_shift);
-                    float& drift_contrib = (new_pm_params.drift > 0? b : a);
-                    drift_contrib = logsum::p7_FLogsum(drift_contrib, new_pm_params_log_abs_drift + events[i].log_start);
-                    float y2 = logdiff::LogDiff(a, b);
-                    s.add(x + 2 * y2);
+                        float a = events[i].log_mean;
+                        float b = new_pm_params_log_scale + pm.state(j).log_level_mean;
+                        float& shift_contrib = (new_pm_params.shift > 0? b : a);
+                        shift_contrib = logsum::p7_FLogsum(shift_contrib, new_pm_params_log_abs_shift);
+                        float& drift_contrib = (new_pm_params.drift > 0? b : a);
+                        drift_contrib = logsum::p7_FLogsum(drift_contrib, new_pm_params_log_abs_drift + events[i].log_start);
+                        float y2 = logdiff::LogDiff(a, b);
+                        s.add(x + 2 * y2);
 #if defined(CHECK_LOGDIFF)
-                    s2.add(x + 2 * y);
+                        s2.add(x + 2 * y);
 #endif
 #else
-                    s.add(x + 2 * y);
+                        s.add(x + 2 * y);
 #endif
+                    }
                 }
             }
-        }
 #if defined(CHECK_LOGDIFF)
-        LOG(debug)
-            << "logdiff:"
-            << " var=" << std::sqrt(std::exp(s.val()) / total_num_events)
-            << " var2=" << std::sqrt(std::exp(s2.val()) / total_num_events) << std::endl;
+            LOG(debug)
+                << "logdiff:"
+                << " var=" << std::sqrt(std::exp(s.val()) / total_num_events)
+                << " var2=" << std::sqrt(std::exp(s2.val()) / total_num_events) << std::endl;
 #endif
-        new_pm_params.var = std::sqrt(std::exp(s.val()) / total_num_events);
-        LOG(debug1)
-            << "var_solution " << new_pm_params.var << std::endl;
+            new_pm_params.var = std::sqrt(std::exp(s.val()) / total_num_events);
+            LOG(debug1)
+                << "var_solution " << new_pm_params.var << std::endl;
+        }
+        //
+        // train p_stay, p_skip
+        //
+        {
+            LogSumSet_Type s_p_stay_num(false);
+            LogSumSet_Type s_p_skip_num(false);
+            LogSumSet_Type s_denom(false);
+            float log_p_stay = std::log(crt_st_params.p_stay);
+            float log_p_step_4 = std::log(1 - crt_st_params.p_stay - crt_st_params.p_skip) - std::log(4.0);
+            for (unsigned k = 0; k < n_event_seqs; ++k)
+            {
+                const Event_Sequence_Type& events = *event_seq_ptrs[k];
+                unsigned n_events = events.size();
+                const Pore_Model_Type& pm = *model_ptrs[single_model? 0 : k];
+                const Pore_Model_Type& scaled_pm = scaled_pm_map.at(model_ptrs[single_model? 0 : k]);
+                Event_Sequence_Type& corrected_events = corrected_event_seqs[k];
+
+                //
+                // P[S_i = j1, S_{i+1} = j2]
+                //
+                auto log_joint_prob = [&] (unsigned i, unsigned j1, unsigned j2, float log_p_trans) {
+                    float p = fwbw[k].cell(i, j1).alpha
+                        + log_p_trans
+                        + scaled_pm.log_pr_emission(j2, corrected_events[i + 1])
+                        + fwbw[k].cell(i + 1, j2).beta
+                        - fwbw[k].log_pr_data();
+                    //- fwbw[k].log_posterior(i, j1));
+                    LOG(debug2) << "step_prob k=" << k
+                                << " i=" << i
+                                << " j1=" << Kmer_Type::to_string(j1)
+                                << " j2=" << Kmer_Type::to_string(j2)
+                                << " log_p_trans=" << log_p_trans
+                                << " res=" << p << std::endl;
+                    return p;
+                };
+
+                for (unsigned i = 0; i < n_events - 1; ++i)
+                {
+                    for (auto j1 : st_train_kmers())
+                    {
+                        // Pr[ S_i = j1 ]
+                        float log_p_j1 = fwbw[k].log_posterior(i, j1);
+                        s_denom.add(log_p_j1);
+                        // Pr[ S_i = j1, S_{i+1} = j1 ]
+                        float log_p_j1_j1 = log_joint_prob(i, j1, j1, log_p_stay);
+                        assert(log_p_j1_j1 <= log_p_j1 + 1.0e-3);
+                        s_p_stay_num.add(log_p_j1_j1);
+                        // Pr[ S_i = j1, dist(j1,S_{i+1}) > 1 ]
+                        float log_p_j1_d01;
+                        {
+                            LogSumSet_Type s2(false);
+                            s2.add(log_p_j1_j1);
+                            for (auto j2 : Kmer_Type::neighbour_list(j1, 1))
+                            {
+                                // transition prob j1 to j2 is (p_step / 4)
+                                s2.add(log_joint_prob(i, j1, j2, log_p_step_4));
+                            }
+                            log_p_j1_d01 = s2.val();
+                        }
+                        assert(log_p_j1_d01 <= log_p_j1 + 1.0e-3);
+                        float p_j1_d2 = std::exp(log_p_j1) - std::exp(log_p_j1_d01);
+                        if (p_j1_d2 < 0.0)
+                        {
+                            p_j1_d2 = 0.0;
+                        }
+                        s_p_skip_num.add(std::log(p_j1_d2));
+                    }
+                }
+            }
+            new_st_params.p_stay = std::exp(s_p_stay_num.val() - s_denom.val());
+            new_st_params.p_skip = std::exp(s_p_skip_num.val() - s_denom.val());
+            if (new_st_params.p_stay < .01 or new_st_params.p_stay > .2
+                or new_st_params.p_skip < .1 or new_st_params.p_skip > .4
+                or new_st_params.p_stay + new_st_params.p_skip > .5)
+            {
+                LOG(warning) << "unusual state transition parameters " << new_st_params << std::endl;
+            }
+        }
     } // train_one_round
 
 }; // class Model_Parameter_Trainer

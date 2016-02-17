@@ -219,9 +219,10 @@ void init_reads(const Pore_Model_Dict_Type& models,
 } // init_reads
 
 void rescale_reads(const Pore_Model_Dict_Type& models,
-                   State_Transitions_Type& transitions,
+                   const State_Transitions_Type& default_transitions,
                    deque< Fast5_Summary_Type >& reads)
 {
+    Model_Parameter_Trainer_Type::init();
     unsigned crt_idx = 0;
     pfor::pfor< unsigned >(
         opts::num_threads,
@@ -349,26 +350,31 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                         model_ptrs.insert(model_ptrs.end(), train_event_seqs[0].size(), &models.at(m_name_0));
                         model_ptrs.insert(model_ptrs.end(), train_event_seqs[1].size(), &models.at(m_name_1));
                         unsigned round = 0;
-                        Pore_Model_Parameters_Type& crt_pm_params = read_summary.params[2].at(m_name_str);
+                        Pore_Model_Parameters_Type& crt_pm_params = read_summary.pm_params[2].at(m_name_str);
+                        State_Transition_Parameters_Type& crt_st_params = read_summary.st_params[2].at(m_name_str);
                         float& crt_fit = model_fit[m_name];
                         crt_fit = -INFINITY;
                         while (true)
                         {
                             Pore_Model_Parameters_Type old_pm_params(crt_pm_params);
+                            State_Transition_Parameters_Type old_st_params(crt_st_params);
                             float old_fit(crt_fit);
                             bool done;
 
                             Model_Parameter_Trainer_Type::train_one_round(
-                                train_event_seq_ptrs, model_ptrs, transitions,
-                                old_pm_params, crt_pm_params, crt_fit, done);
+                                train_event_seq_ptrs, model_ptrs, default_transitions,
+                                old_pm_params, old_st_params,
+                                crt_pm_params, crt_st_params, crt_fit, done);
 
                             LOG(debug)
                                 << "scaling_round read [" << read_summary.read_id
                                 << "] strand [" << 2
                                 << "] model [" << m_name_str
-                                << "] old_params [" << old_pm_params
+                                << "] old_pm_params [" << old_pm_params
+                                << "] old_st_params [" << old_st_params
                                 << "] old_fit [" << old_fit
-                                << "] crt_params [" << crt_pm_params
+                                << "] crt_pm_params [" << crt_pm_params
+                                << "] crt_st_params [" << crt_st_params
                                 << "] crt_fit [" << crt_fit
                                 << "] round [" << round << "]" << endl;
 
@@ -384,11 +390,14 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                                           << "] strand [" << 2
                                           << "] model [" << m_name_str
                                           << "] old_params [" << old_pm_params
+                                          << "] old_st_params [" << old_st_params
                                           << "] old_fit [" << old_fit
-                                          << "] crt_params [" << crt_pm_params
+                                          << "] crt_pm_params [" << crt_pm_params
+                                          << "] crt_st_params [" << crt_st_params
                                           << "] crt_fit [" << crt_fit
                                           << "] round [" << round << "]" << endl;
                                 crt_pm_params = old_pm_params;
+                                crt_st_params = old_st_params;
                                 crt_fit = old_fit;
                                 break;
                             }
@@ -406,7 +415,8 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                             << "scaling_result read [" << read_summary.read_id
                             << "] strand [" << 2
                             << "] model [" << m_name_str
-                            << "] parameters [" << crt_pm_params
+                            << "] pm_params [" << crt_pm_params
+                            << "] st_params [" << crt_st_params
                             << "] fit [" << crt_fit
                             << "] rounds [" << round << "]" << endl;
                     } // for m_name[1]
@@ -484,26 +494,31 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                     for (const auto& m_name : model_list[st])
                     {
                         unsigned round = 0;
-                        Pore_Model_Parameters_Type& crt_pm_params = read_summary.params[st].at(m_name);
+                        Pore_Model_Parameters_Type& crt_pm_params = read_summary.pm_params[st].at(m_name);
+                        State_Transition_Parameters_Type& crt_st_params = read_summary.st_params[st].at(m_name);
                         float& crt_fit = model_fit[m_name];
                         crt_fit = -INFINITY;
                         while (true)
                         {
                             Pore_Model_Parameters_Type old_pm_params(crt_pm_params);
+                            State_Transition_Parameters_Type old_st_params(crt_st_params);
                             float old_fit(crt_fit);
                             bool done;
 
                             Model_Parameter_Trainer_Type::train_one_round(
-                                train_event_seq_ptrs, { &models.at(m_name) }, transitions,
-                                old_pm_params, crt_pm_params, crt_fit, done);
+                                train_event_seq_ptrs, { &models.at(m_name) }, default_transitions,
+                                old_pm_params, old_st_params,
+                                crt_pm_params, crt_st_params, crt_fit, done);
 
                             LOG(debug)
                                 << "scaling_round read [" << read_summary.read_id
                                 << "] strand [" << st
                                 << "] model [" << m_name
-                                << "] old_params [" << old_pm_params
+                                << "] old_pm_params [" << old_pm_params
+                                << "] old_st_params [" << old_st_params
                                 << "] old_fit [" << old_fit
-                                << "] crt_params [" << crt_pm_params
+                                << "] crt_pm_params [" << crt_pm_params
+                                << "] crt_st_params [" << crt_st_params
                                 << "] crt_fit [" << crt_fit
                                 << "] round [" << round << "]" << endl;
 
@@ -518,12 +533,15 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                                 LOG(info) << "scaling_regression read [" << read_summary.read_id
                                           << "] strand [" << st
                                           << "] model [" << m_name
-                                          << "] old_params [" << old_pm_params
+                                          << "] old_pm_params [" << old_pm_params
+                                          << "] old_st_params [" << old_st_params
                                           << "] old_fit [" << old_fit
-                                          << "] crt_params [" << crt_pm_params
+                                          << "] crt_pm_params [" << crt_pm_params
+                                          << "] crt_st_params [" << crt_st_params
                                           << "] crt_fit [" << crt_fit
                                           << "] round [" << round << "]" << endl;
                                 crt_pm_params = old_pm_params;
+                                crt_st_params = old_st_params;
                                 crt_fit = old_fit;
                                 break;
                             }
@@ -541,7 +559,8 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                             << "scaling_result read [" << read_summary.read_id
                             << "] strand [" << st
                             << "] model [" << m_name
-                            << "] parameters [" << crt_pm_params
+                            << "] pm_params [" << crt_pm_params
+                            << "] st_params [" << crt_st_params
                             << "] fit [" << crt_fit
                             << "] rounds [" << round << "]" << endl;
                     } // for m_name
@@ -585,7 +604,7 @@ void write_fasta(ostream& os, const string& name, const string& seq)
 } // write_fasta
 
 void basecall_reads(const Pore_Model_Dict_Type& models,
-                    const State_Transitions_Type& transitions,
+                    const State_Transitions_Type& default_transitions,
                     deque< Fast5_Summary_Type >& reads)
 {
     strict_fstream::ofstream ofs;
@@ -633,15 +652,26 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
             }
 
             // basecalling functor
-            auto basecall_strand = [&] (unsigned st, string m_name, const Pore_Model_Parameters_Type& pm_params) {
+            auto basecall_strand = [&] (unsigned st, string m_name,
+                                        const Pore_Model_Parameters_Type& pm_params,
+                                        const State_Transition_Parameters_Type& st_params) {
                 // scale model
                 Pore_Model_Type pm(models.at(m_name));
                 pm.scale(pm_params);
+                State_Transitions_Type custom_transitions;
+                if (not st_params.is_default())
+                {
+                    custom_transitions.compute_transitions_fast(st_params);
+                }
+                const State_Transitions_Type& transitions = (st_params.is_default()
+                                                             ? default_transitions
+                                                             : custom_transitions);
                 LOG(info)
                     << "basecalling read [" << read_summary.read_id
                     << "] strand [" << st
                     << "] model [" << m_name
-                    << "] parameters " << pm_params << endl;
+                    << "] pm_params [" << pm_params
+                    << "] st_params [" << st_params << "]" << endl;
                 LOG(debug)
                     << "mean_stdv read [" << read_summary.read_id
                     << "] strand [" << st
@@ -653,8 +683,8 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                         << "means_apart read [" << read_summary.read_id
                         << "] strand [" << st
                         << "] model [" << m_name
-                        << "] parameters " << pm_params
-                        << " model_mean=[" << pm.mean()
+                        << "] parameters [" << pm_params
+                        << "] model_mean=[" << pm.mean()
                         << "] events_mean=[" << r_stats[st].first
                         << "]" << endl;
                 }
@@ -680,7 +710,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                 else
                 {
                     // no preferred model, try all for which we have scaling parameters
-                    for (const auto& p : read_summary.params[2])
+                    for (const auto& p : read_summary.pm_params[2])
                     {
                         model_sublist.push_back(p.first);
                     }
@@ -697,7 +727,9 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                     array< tuple< float, string >, 2 > part_results;
                     for (unsigned st = 0; st < 2; ++st)
                     {
-                        part_results[st] = basecall_strand(st, m_name[st], read_summary.params[2].at(m_name_str));
+                        part_results[st] = basecall_strand(
+                            st, m_name[st],
+                            read_summary.pm_params[2].at(m_name_str), read_summary.st_params[2].at(m_name_str));
                     }
                     results.emplace_back(get<0>(part_results[0]) + get<0>(part_results[1]),
                                          get<0>(part_results[0]),
@@ -713,17 +745,20 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                 array< string, 2 > best_m_name{{ get<3>(results.back()), get<4>(results.back()) }};
                 array< const string*, 2 > base_seq_ptr{{ &get<5>(results.back()), &get<6>(results.back()) }};
                 string best_m_name_str = best_m_name[0] + '+' + best_m_name[1];
-                const Pore_Model_Parameters_Type& best_params = read_summary.params[2].at(best_m_name_str);
+                const Pore_Model_Parameters_Type& best_pm_params = read_summary.pm_params[2].at(best_m_name_str);
+                const State_Transition_Parameters_Type& best_st_params = read_summary.st_params[2].at(best_m_name_str);
                 for (unsigned st = 0; st < 2; ++st)
                 {
                     LOG(info)
                         << "best_model read [" << read_summary.read_id
                         << "] strand [" << st
                         << "] model [" << best_m_name[st]
-                        << "] parameters " << best_params
-                        << " log_path_prob [" << best_log_path_prob[st] << "]" << endl;
+                        << "] pm_params [" << best_pm_params
+                        << "] st_params [" << best_st_params
+                        << "] log_path_prob [" << best_log_path_prob[st] << "]" << endl;
                     read_summary.preferred_model[st] = best_m_name[st];
-                    read_summary.params[st][best_m_name[st]] = best_params;
+                    read_summary.pm_params[st][best_m_name[st]] = best_pm_params;
+                    read_summary.st_params[st][best_m_name[st]] = best_st_params;
                     ostringstream tmp;
                     tmp << read_summary.read_id << ":" << read_summary.base_file_name << ":" << st;
                     write_fasta(oss, tmp.str(), *base_seq_ptr[st]);
@@ -745,7 +780,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                     else
                     {
                         // no preferred model, try all for which we have scaling
-                        for (const auto& p : read_summary.params[st])
+                        for (const auto& p : read_summary.pm_params[st])
                         {
                             model_sublist.push_back(p.first);
                         }
@@ -754,7 +789,9 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                     deque< tuple< float, string, string > > results;
                     for (const auto& m_name : model_sublist)
                     {
-                        auto r = basecall_strand(st, m_name, read_summary.params[st].at(m_name));
+                        auto r = basecall_strand(
+                            st, m_name,
+                            read_summary.pm_params[st].at(m_name), read_summary.st_params[st].at(m_name));
                         results.emplace_back(get<0>(r), string(m_name), move(get<1>(r)));
                     }
                     sort(results.begin(), results.end());
@@ -764,8 +801,9 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                         << "best_model read [" << read_summary.read_id
                         << "] strand [" << st
                         << "] model [" << best_m_name
-                        << "] parameters " << read_summary.params[st].at(best_m_name)
-                        << " log_path_prob [" << get<0>(results.back()) << "]" << endl;
+                        << "] pm_params [" << read_summary.pm_params[st].at(best_m_name)
+                        << "] st_params [" << read_summary.st_params[st].at(best_m_name)
+                        << "] log_path_prob [" << get<0>(results.back()) << "]" << endl;
                     read_summary.preferred_model[st] = best_m_name;
                     ostringstream tmp;
                     tmp << read_summary.read_id << ":" << read_summary.base_file_name << ":" << st;
@@ -788,23 +826,23 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
 int real_main()
 {
     Pore_Model_Dict_Type models;
-    State_Transitions_Type transitions;
+    State_Transitions_Type default_transitions;
     deque< Fast5_Summary_Type > reads;
     list< string > files;
     // initialize structs
     init_models(models);
-    init_transitions(transitions);
+    init_transitions(default_transitions);
     init_files(files);
     init_reads(models, files, reads);
     if (opts::accurate_scaling)
     {
         // do some rescaling
-        rescale_reads(models, transitions, reads);
+        rescale_reads(models, default_transitions, reads);
     }
     if (not opts::scale_only)
     {
         // basecall reads
-        basecall_reads(models, transitions, reads);
+        basecall_reads(models, default_transitions, reads);
     }
     // print stats
     if (not opts::stats_fn.get().empty())
@@ -836,6 +874,8 @@ int main(int argc, char * argv[])
         LOG(warning) << "enabled multi-threading with non-threadsafe HDF5: using experimental locking" << endl;
     }
 #endif
+    State_Transition_Parameters_Type::default_p_stay() = opts::pr_stay;
+    State_Transition_Parameters_Type::default_p_skip() = opts::pr_skip;
     Fast5_Summary_Type::min_read_len() = opts::min_read_len;
     Fast5_Summary_Type::max_read_len() = opts::max_read_len;
     if (opts::scale_select_model_threshold.get() < 0.0)

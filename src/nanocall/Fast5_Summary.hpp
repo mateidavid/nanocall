@@ -27,7 +27,8 @@ public:
     std::string base_file_name;
     std::string read_id;
     std::array< std::string, 3 > preferred_model;
-    std::array< std::map< std::string, Pore_Model_Parameters_Type >, 3 > params;
+    std::array< std::map< std::string, Pore_Model_Parameters_Type >, 3 > pm_params;
+    std::array< std::map< std::string, State_Transition_Parameters_Type >, 3 > st_params;
     std::array< unsigned, 4 > strand_bounds;
     std::array< Float_Type, 2 > time_length;
     unsigned num_ed_events;
@@ -187,7 +188,8 @@ public:
                                         << "initial_scaling read [" << read_id << "] strand [" << 2
                                         << "] model [" << m_name_str
                                         << "] parameters [" << param << "]" << std::endl;
-                                    params[2][m_name_str] = std::move(param);
+                                    pm_params[2][m_name_str] = std::move(param);
+                                    st_params[2][m_name_str] = State_Transition_Parameters_Type();
                                 }
                 }
                 else // not scale_strands_together
@@ -208,7 +210,8 @@ public:
                                 LOG("Fast5_Summary", debug)
                                     << "initial_scaling read [" << read_id << "] strand [" << st
                                     << "] model [" << p.first << "] parameters [" << param << "]" << std::endl;
-                                params[st][p.first] = std::move(param);
+                                pm_params[st][p.first] = std::move(param);
+                                st_params[st][p.first] = State_Transition_Parameters_Type();
                             }
                         }
                     }
@@ -315,7 +318,9 @@ public:
                << "\tn" << st << "_drift"
                << "\tn" << st << "_var"
                << "\tn" << st << "_scale_sd"
-               << "\tn" << st << "_var_sd";
+               << "\tn" << st << "_var_sd"
+               << "\tn" << st << "_p_stay"
+               << "\tn" << st << "_p_skip";
         }
     }
 
@@ -329,11 +334,15 @@ public:
             os << '\t' << preferred_model[st] << '\t';
             if (not preferred_model[st].empty())
             {
-                params[st].at(preferred_model[st]).write_tsv(os);
+                pm_params[st].at(preferred_model[st]).write_tsv(os);
+                os << '\t';
+                st_params[st].at(preferred_model[st]).write_tsv(os);
             }
             else
             {
                 Pore_Model_Parameters_Type().write_tsv(os);
+                os << '\t';
+                State_Transition_Parameters_Type().write_tsv(os);
             }
         }
     }

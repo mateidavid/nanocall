@@ -9,6 +9,46 @@
 
 #include "Kmer.hpp"
 #include "logsumset.hpp"
+#include "logger.hpp"
+
+template < typename Float_Type = float, unsigned Kmer_Size = 6 >
+struct State_Transition_Parameters
+{
+    Float_Type p_stay;
+    Float_Type p_skip;
+
+    static Float_Type& default_p_stay()
+    {
+        static Float_Type _default_p_stay = .09;
+        return _default_p_stay;
+    }
+    static Float_Type& default_p_skip()
+    {
+        static Float_Type _default_p_skip = .28;
+        return _default_p_skip;
+    }
+
+    State_Transition_Parameters()
+        : p_stay(default_p_stay()), p_skip(default_p_skip()) {}
+
+    bool is_default() const
+    {
+        return p_stay == default_p_stay() and p_skip == default_p_skip();
+    }
+
+    friend std::ostream& operator << (std::ostream& os, const State_Transition_Parameters& stp)
+    {
+        os << "[p_stay=" << stp.p_stay
+           << " p_skip=" << stp.p_skip << "]";
+        return os;
+    }
+    void write_tsv(std::ostream& os) const
+    {
+        os << std::fixed << std::setprecision(5)
+           << p_stay << '\t'
+           << p_skip;
+    }
+}; // struct State_Transition_Parameters
 
 template < typename Float_Type = float >
 struct State_Neighbours
@@ -18,7 +58,7 @@ struct State_Neighbours
     std::vector< std::pair< unsigned, Float_Type > > to_v;
     Float_Type p_rest_from;
     Float_Type p_rest_to;
-};
+}; // struct State_Neighbours
 
 template < typename Float_Type = float, unsigned Kmer_Size = 6 >
 class State_Transitions
@@ -26,6 +66,7 @@ class State_Transitions
 public:
     typedef Kmer< Kmer_Size > Kmer_Type;
     typedef State_Neighbours< Float_Type > State_Neighbours_Type;
+    typedef State_Transition_Parameters< Float_Type > State_Transition_Parameters_Type;
     static const unsigned n_states = 1u << (2 * Kmer_Size);
 
     State_Transitions() { _neighbours.resize(n_states); }
@@ -81,32 +122,50 @@ public:
         update_fields();
     }
 
+    static Float_Type get_trans_prob(unsigned i, unsigned j,
+                                     Float_Type p_stay, Float_Type p_step, Float_Type p_skip_1)
+    {
+        Float_Type p = 0;
+        if (i == j)
+        {
+            p += p_stay;
+        }
+        if (Kmer_Type::suffix(i, Kmer_Size - 1) == Kmer_Type::prefix(j, Kmer_Size - 1))
+        {
+            p += p_step / 4;
+        }
+        for (unsigned l = 2; l < Kmer_Size; ++l)
+            if (Kmer_Type::suffix(i, Kmer_Size - l) == Kmer_Type::prefix(j, Kmer_Size - l))
+            {
+                p += pow(p_skip_1, l - 1) / (1u << (2 * l));
+            }
+        p += (pow(p_skip_1, 5) / (Float_Type(1.0) - p_skip_1)) / n_states;
+        return p;
+    }
+
     // recompute transition table
     void compute_transitions(Float_Type p_skip_default, Float_Type p_stay, Float_Type p_cutoff,
                              const std::map< unsigned, Float_Type >& p_skip_map = {})
     {
         clear();
-        for (size_t i = 0; i < n_states; ++i)
+        for (unsigned i = 0; i < n_states; ++i)
         {
             Float_Type p_skip = p_skip_default;
             if (p_skip_map.count(i))
             {
                 p_skip = p_skip_map.at(i);
             }
-            for (size_t j = 0; j < n_states; ++j)
+            Float_Type p_step = 1.0 - p_stay - p_skip;
+            // p_skip = sum_{i>=1} p_skip_1^i
+            Float_Type p_skip_1 = p_skip / (p_skip + 1.0);
+            LOG(debug2) << "i=" << Kmer_Type::to_string(i)
+                        << " p_stay=" << p_stay
+                        << " p_skip=" << p_skip
+                        << " p_step=" << p_step
+                        << " p_skip_1=" << p_skip_1 << std::endl;
+            for (unsigned j = 0; j < n_states; ++j)
             {
-                Float_Type p = 0;
-                if (i == j)
-                {
-                    p += p_stay;
-                }
-                for (unsigned k = 1; k < Kmer_Size; ++k)
-                    if ((i & ((1u << (2 * k)) - 1)) == (j >> (2 * (Kmer_Size - k))))
-                    {
-                        p += (1 - p_stay) * (1 - p_skip) * pow(p_skip, Kmer_Size - k - 1)
-                            / (1u << (2 * (Kmer_Size - k)));
-                    }
-                p += (1 - p_stay) * pow(p_skip, 5) / n_states;
+                Float_Type p = get_trans_prob(i, j, p_stay, p_step, p_skip_1);
                 if (p > p_cutoff)
                 {
                     neighbours(i).to_v.push_back(std::make_pair(j, std::log(p)));
@@ -114,6 +173,50 @@ public:
             }
         }
         update_fields();
+    }
+
+    // compute transition table allowing a maximum of 1 skip
+    void compute_transitions_fast(Float_Type p_skip_default, Float_Type p_stay,
+                                  const std::map< unsigned, Float_Type >& p_skip_map = {})
+    {
+        struct Default_Float_Type
+        {
+            Default_Float_Type(Float_Type _val = 0.0) : val(_val) {}
+            Float_Type val;
+        }; // struct Default_Float
+
+        clear();
+        for (unsigned i = 0; i < n_states; ++i)
+        {
+            Float_Type p_skip = p_skip_default;
+            if (p_skip_map.count(i))
+            {
+                p_skip = p_skip_map.at(i);
+            }
+            Float_Type p_step = 1.0 - p_stay - p_skip;
+            // p_skip = sum_{i>=1} p_skip_1^i
+            Float_Type p_skip_1 = p_skip / (p_skip + 1.0);
+            LOG(debug2) << "i=" << Kmer_Type::to_string(i)
+                        << " p_stay=" << p_stay
+                        << " p_skip=" << p_skip
+                        << " p_step=" << p_step
+                        << " p_skip_1=" << p_skip_1 << std::endl;
+            std::set< unsigned > to_s{i};
+            const auto& nl1 = Kmer_Type::neighbour_list(i, 1);
+            to_s.insert(nl1.begin(), nl1.end());
+            const auto& nl2 = Kmer_Type::neighbour_list(i, 2);
+            to_s.insert(nl2.begin(), nl2.end());
+            for (const auto& j : to_s)
+            {
+                Float_Type p = get_trans_prob(i, j, p_stay, p_step, p_skip_1);
+                neighbours(i).to_v.push_back(std::make_pair(j, std::log(p)));
+            }
+        }
+        update_fields();
+    }
+    void compute_transitions_fast(const State_Transition_Parameters_Type& stp)
+    {
+        compute_transitions_fast(stp.p_skip, stp.p_stay);
     }
 
     friend std::ostream& operator << (std::ostream& os, const State_Transitions& st)
@@ -147,6 +250,7 @@ private:
     std::vector< State_Neighbours_Type > _neighbours;
 }; // class State_Transitions
 
+typedef State_Transition_Parameters<> State_Transition_Parameters_Type;
 typedef State_Transitions<> State_Transitions_Type;
 
 #endif
