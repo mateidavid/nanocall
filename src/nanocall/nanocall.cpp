@@ -3,6 +3,7 @@
 #include <string>
 #include <tclap/CmdLine.h>
 
+#include "global_assert.hpp"
 #include "version.hpp"
 #include "Pore_Model.hpp"
 #include "Builtin_Model.hpp"
@@ -237,6 +238,7 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
         [&] (unsigned& i) {
             Fast5_Summary_Type& read_summary = reads[i];
             if (read_summary.num_ed_events == 0) return;
+            global_assert::global_msg() = read_summary.read_id;
             read_summary.load_events(opts::scale_strands_together);
             //
             // create per-strand list of models to try
@@ -263,7 +265,7 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                         }
                     }
                 }
-                assert(not model_list.empty());
+                ASSERT(not model_list.empty());
             }
             //
             // create per-strand list of event sequences on which to train
@@ -633,6 +635,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
         [&] (unsigned& i, ostringstream& oss) {
             Fast5_Summary_Type& read_summary = reads[i];
             if (read_summary.num_ed_events == 0) return;
+            global_assert::global_msg() = read_summary.read_id;
             read_summary.load_events(opts::scale_strands_together);
 
             // compute read statistics used to check scaling
@@ -721,7 +724,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                 {
                     array< string, 2 > m_name;
                     auto sep_idx = m_name_str.find('+');
-                    assert(sep_idx != string::npos);
+                    ASSERT(sep_idx != string::npos);
                     m_name[0] = m_name_str.substr(0, sep_idx);
                     m_name[1] = m_name_str.substr(sep_idx + 1);
                     array< tuple< float, string >, 2 > part_results;

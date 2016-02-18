@@ -5,6 +5,7 @@
 #include <vector>
 #include <map>
 
+#include "global_assert.hpp"
 #include "Pore_Model.hpp"
 #include "State_Transitions.hpp"
 #include "Forward_Backward.hpp"
@@ -74,7 +75,7 @@ struct Model_Parameter_Trainer
         bool& done)
     {
         // accept either 1 model per sequence, or just 1 model
-        assert(model_ptrs.size() == event_seq_ptrs.size() or model_ptrs.size() == 1);
+        ASSERT(model_ptrs.size() == event_seq_ptrs.size() or model_ptrs.size() == 1);
         bool single_model = model_ptrs.size() == 1;
         unsigned n_event_seqs = event_seq_ptrs.size();
         unsigned total_num_events = alg::accumulate(
@@ -242,7 +243,7 @@ struct Model_Parameter_Trainer
             float x = A_copy[i][0] * new_pm_params.shift
                 + A_copy[i][1] * new_pm_params.scale
                 + A_copy[i][2] * new_pm_params.drift;
-            assert((x - B_copy[i])/std::max(x, B_copy[i]) < 1e-3);
+            ASSERT((x - B_copy[i])/std::max(x, B_copy[i]) < 1e-3);
         }
 #endif
         //
@@ -348,7 +349,7 @@ struct Model_Parameter_Trainer
                         s_denom.add(log_p_j1);
                         // Pr[ S_i = j1, S_{i+1} = j1 ]
                         float log_p_j1_j1 = log_joint_prob(i, j1, j1, log_p_stay);
-                        assert(log_p_j1_j1 <= log_p_j1 + 1.0e-3);
+                        ASSERT(log_p_j1_j1 <= log_p_j1 + 1.0e-3);
                         s_p_stay_num.add(log_p_j1_j1);
                         // Pr[ S_i = j1, dist(j1,S_{i+1}) > 1 ]
                         float log_p_j1_d01;
@@ -362,7 +363,7 @@ struct Model_Parameter_Trainer
                             }
                             log_p_j1_d01 = s2.val();
                         }
-                        assert(log_p_j1_d01 <= log_p_j1 + 1.0e-3);
+                        ASSERT(log_p_j1_d01 <= log_p_j1 + 1.0e-3);
                         float p_j1_d2 = std::exp(log_p_j1) - std::exp(log_p_j1_d01);
                         if (p_j1_d2 < 0.0)
                         {
