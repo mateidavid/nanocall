@@ -374,11 +374,17 @@ struct Model_Parameter_Trainer
             }
             new_st_params.p_stay = std::exp(s_p_stay_num.val() - s_denom.val());
             new_st_params.p_skip = std::exp(s_p_skip_num.val() - s_denom.val());
-            if (new_st_params.p_stay < .01 or new_st_params.p_stay > .2
-                or new_st_params.p_skip < .1 or new_st_params.p_skip > .4
-                or new_st_params.p_stay + new_st_params.p_skip > .5)
+            if (new_st_params.p_stay < .05 or new_st_params.p_stay > .4
+                or new_st_params.p_skip < .05 or new_st_params.p_skip > .4)
             {
-                LOG(warning) << "unusual state transition parameters " << new_st_params << std::endl;
+                State_Transition_Parameters_Type alt_st_params;
+                alt_st_params.p_stay = std::max(new_st_params.p_stay, .05f);
+                alt_st_params.p_stay = std::min(alt_st_params.p_stay, .4f);
+                alt_st_params.p_skip = std::max(new_st_params.p_skip, .05f);
+                alt_st_params.p_skip = std::min(alt_st_params.p_skip, .4f);
+                LOG(warning) << "unusual state transition parameters " << new_st_params
+                             << " resetting them to " << alt_st_params << std::endl;
+                std::swap(alt_st_params, new_st_params);
             }
         }
     } // train_one_round
