@@ -26,15 +26,16 @@ public:
     std::string file_name;
     std::string base_file_name;
     std::string read_id;
-    std::array< std::string, 3 > preferred_model;
-    std::array< std::map< std::string, Pore_Model_Parameters_Type >, 3 > pm_params;
-    std::array< std::map< std::string, State_Transition_Parameters_Type >, 3 > st_params;
+    std::array< std::array< std::string, 2 >, 3 > preferred_model;
+    std::map< std::array< std::string, 2 >, Pore_Model_Parameters_Type > pm_params_m;
+    std::map< std::array< std::string, 2 >, std::array< State_Transition_Parameters_Type, 2 > > st_params_m;
     std::array< unsigned, 4 > strand_bounds;
     std::array< Float_Type, 2 > time_length;
     unsigned num_ed_events;
     float sampling_rate;
     float abasic_level;
     bool valid;
+    bool scale_strands_together;
 
     // from fast5 file
     std::unique_ptr< std::vector< fast5::EventDetection_Event_Entry > > ed_events_ptr;
@@ -78,10 +79,10 @@ public:
     }
 
     Fast5_Summary() : valid(false) {}
-    Fast5_Summary(const std::string fn, const Pore_Model_Dict_Type& models, bool scale_strands_together)
-        : valid(false) { summarize(fn, models, scale_strands_together); }
+    Fast5_Summary(const std::string fn, const Pore_Model_Dict_Type& models, bool sst)
+        : valid(false) { summarize(fn, models, sst); }
 
-    void summarize(const std::string& fn, const Pore_Model_Dict_Type& models, bool scale_strands_together)
+    void summarize(const std::string& fn, const Pore_Model_Dict_Type& models, bool sst)
     {
         valid = true;
         // initialize fields
@@ -153,8 +154,11 @@ public:
                     num_ed_events = 0;
                     break;
                 }
+                scale_strands_together = (sst
+                                          and events(0).size() >= min_read_len()
+                                          and events(1).size() >= min_read_len());
                 // compute time lengths
-                load_events(scale_strands_together, &f);
+                load_events(&f);
                 for (unsigned st = 0; st < 2; ++st)
                 {
                     if (events(st).size() < min_read_len()) continue;
@@ -163,9 +167,7 @@ public:
                 //
                 // compute initial model scalings
                 //
-                if (scale_strands_together
-                    and events(0).size() >= min_read_len()
-                    and events(1).size() >= min_read_len())
+                if (scale_strands_together)
                 {
                     auto r0 = alg::mean_stdv_of< Float_Type >(
                         events(0),
@@ -178,18 +180,19 @@ public:
                             for (const auto& p1 : models)
                                 if (p1.second.strand() == 1 or p1.second.strand() == 2)
                                 {
-                                    auto m_name_str = p0.first + '+' + p1.first;
-                                    Pore_Model_Parameters_Type param;
-                                    param.scale = (r0.second / p0.second.stdv()
-                                                   + r1.second / p1.second.stdv()) / 2;
-                                    param.shift = (r0.first - param.scale * p0.second.mean()
-                                                   + r1.first - param.scale * p1.second.mean()) / 2;
+                                    std::array< std::string, 2 > m_name = {{ p0.first, p1.first }};
+                                    Pore_Model_Parameters_Type pm_params;
+                                    pm_params.scale = (r0.second / p0.second.stdv()
+                                                       + r1.second / p1.second.stdv()) / 2;
+                                    pm_params.shift = (r0.first - pm_params.scale * p0.second.mean()
+                                                       + r1.first - pm_params.scale * p1.second.mean()) / 2;
                                     LOG("Fast5_Summary", debug)
-                                        << "initial_scaling read [" << read_id << "] strand [" << 2
-                                        << "] model [" << m_name_str
-                                        << "] parameters [" << param << "]" << std::endl;
-                                    pm_params[2][m_name_str] = std::move(param);
-                                    st_params[2][m_name_str] = State_Transition_Parameters_Type();
+                                        << "initial_scaling read [" << read_id
+                                        << "] model [" << m_name[0] << "+" << m_name[1]
+                                        << "] pm_params [" << pm_params << "]" << std::endl;
+                                    pm_params_m[m_name] = std::move(pm_params);
+                                    st_params_m[m_name][0] = State_Transition_Parameters_Type();
+                                    st_params_m[m_name][1] = State_Transition_Parameters_Type();
                                 }
                 }
                 else // not scale_strands_together
@@ -204,14 +207,17 @@ public:
                         {
                             if (p.second.strand() == st or p.second.strand() == 2)
                             {
-                                Pore_Model_Parameters_Type param;
-                                param.scale = r.second / p.second.stdv();
-                                param.shift = r.first - param.scale * p.second.mean();
+                                std::array< std::string, 2 > m_name;
+                                m_name[st] = p.first;
+                                Pore_Model_Parameters_Type pm_params;
+                                pm_params.scale = r.second / p.second.stdv();
+                                pm_params.shift = r.first - pm_params.scale * p.second.mean();
                                 LOG("Fast5_Summary", debug)
-                                    << "initial_scaling read [" << read_id << "] strand [" << st
-                                    << "] model [" << p.first << "] parameters [" << param << "]" << std::endl;
-                                pm_params[st][p.first] = std::move(param);
-                                st_params[st][p.first] = State_Transition_Parameters_Type();
+                                    << "initial_scaling read [" << read_id
+                                    << "] model [" << m_name[0] << "+" << m_name[1]
+                                    << "] pm_params [" << pm_params << "]" << std::endl;
+                                pm_params_m[m_name] = std::move(pm_params);
+                                st_params_m[m_name][st] = State_Transition_Parameters_Type();
                             }
                         }
                     }
@@ -227,7 +233,7 @@ public:
         ed_events_ptr.reset();
     } // summarize
 
-    void load_events(bool scale_strands_together, fast5::File* f_p = nullptr)
+    void load_events(fast5::File* f_p = nullptr)
     {
         assert(valid);
         drop_events();
@@ -331,12 +337,12 @@ public:
            << '\t' << strand_bounds[2] << '\t' << strand_bounds[3];
         for (unsigned st = 0; st < 2; ++st)
         {
-            os << '\t' << preferred_model[st] << '\t';
-            if (not preferred_model[st].empty())
+            os << '\t' << preferred_model[st][st] << '\t';
+            if (not preferred_model[st][st].empty())
             {
-                pm_params[st].at(preferred_model[st]).write_tsv(os);
+                pm_params_m.at(preferred_model[st]).write_tsv(os);
                 os << '\t';
-                st_params[st].at(preferred_model[st]).write_tsv(os);
+                st_params_m.at(preferred_model[st])[st].write_tsv(os);
             }
             else
             {

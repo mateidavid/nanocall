@@ -12,7 +12,7 @@
 #include "Fast5_Summary.hpp"
 #include "Viterbi.hpp"
 #include "Forward_Backward.hpp"
-#include "Model_Parameter_Trainer.hpp"
+#include "Parameter_Trainer.hpp"
 #include "logger.hpp"
 #include "alg.hpp"
 #include "zstr.hpp"
@@ -223,7 +223,7 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                    const State_Transitions_Type& default_transitions,
                    deque< Fast5_Summary_Type >& reads)
 {
-    Model_Parameter_Trainer_Type::init();
+    Parameter_Trainer_Type::init();
     unsigned crt_idx = 0;
     pfor::pfor< unsigned >(
         opts::num_threads,
@@ -239,7 +239,7 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
             Fast5_Summary_Type& read_summary = reads[i];
             if (read_summary.num_ed_events == 0) return;
             global_assert::global_msg() = read_summary.read_id;
-            read_summary.load_events(opts::scale_strands_together);
+            read_summary.load_events();
             //
             // create per-strand list of models to try
             //
@@ -249,10 +249,10 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                 // if not enough events, ignore strand
                 if (read_summary.events(st).size() < opts::min_read_len) continue;
                 // create list of models to try
-                if (not read_summary.preferred_model[st].empty())
+                if (not read_summary.preferred_model[st][st].empty())
                 {
                     // if we have a preferred model, use that
-                    model_list[st].push_back(read_summary.preferred_model[st]);
+                    model_list[st].push_back(read_summary.preferred_model[st][st]);
                 }
                 else
                 {
@@ -276,107 +276,63 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                 // if not enough events, ignore strand
                 if (read_summary.events(st).size() < opts::min_read_len) continue;
                 // create 2 event sequences on which to train
-                unsigned n_events = min((size_t)opts::scale_num_events.get(), read_summary.events(st).size());
+                unsigned num_train_events = min((size_t)opts::scale_num_events.get(), read_summary.events(st).size());
                 train_event_seqs[st].emplace_back(
-                    read_summary.events(st).begin(), read_summary.events(st).begin() + n_events / 2);
+                    read_summary.events(st).begin(), read_summary.events(st).begin() + num_train_events / 2);
                 train_event_seqs[st].emplace_back(
-                    read_summary.events(st).end() - n_events / 2, read_summary.events(st).end());
+                    read_summary.events(st).end() - num_train_events / 2, read_summary.events(st).end());
             }
-            if (opts::scale_strands_together
-                and read_summary.events(0).size() >= opts::min_read_len
-                and read_summary.events(1).size() >= opts::min_read_len)
+            //
+            // branch on whether pore models should be scaled together
+            //
+            if (read_summary.scale_strands_together)
             {
                 // prepare vector of event sequences
-                vector< const Event_Sequence_Type* > train_event_seq_ptrs;
+                vector< pair< const Event_Sequence_Type*, unsigned > > train_event_seq_ptrs;
                 for (unsigned st = 0; st < 2; ++st)
                 {
                     for (const auto& events : train_event_seqs[st])
                     {
-                        train_event_seq_ptrs.push_back(&events);
+                        train_event_seq_ptrs.push_back(make_pair(&events, st));
                     }
                 }
-                // run fwbw for 1 round, update params
-                map< pair< string, string >, float > model_fit;
-                /*
+                // track model fit
+                // key = pore model name; value = fit
+                map< array< string, 2 >, float > model_fit;
                 for (const auto& m_name_0 : model_list[0])
                 {
                     for (const auto& m_name_1 : model_list[1])
                     {
-                        auto m_name_str = m_name_0 + '+' + m_name_1;
-                        auto m_name = make_pair(m_name_0, m_name_1);
-                        // prepare vector of model pointers
-                        vector< const Pore_Model_Type* > model_ptrs;
-                        model_ptrs.insert(model_ptrs.end(), train_event_seqs[0].size(), &models.at(m_name_0));
-                        model_ptrs.insert(model_ptrs.end(), train_event_seqs[1].size(), &models.at(m_name_1));
-                        Pore_Model_Parameters_Type old_pm_params = read_summary.params[2].at(m_name_str);
-                        Pore_Model_Parameters_Type crt_pm_params;
-                        bool done;
-                        Model_Parameter_Trainer_Type::train_one_round(
-                            train_event_seq_ptrs, model_ptrs, transitions,
-                            old_pm_params, crt_pm_params, model_fit[m_name], done);
-                        LOG(debug)
-                            << "scaling_round read [" << read_summary.read_id
-                            << "] strand [" << 2
-                            << "] model [" << m_name_str
-                            << "] old_params [" << old_pm_params
-                            << "] old_fit [" << -INFINITY
-                            << "] crt_params [" << crt_pm_params
-                            << "] crt_fit [" << model_fit[m_name]
-                            << "] round [0]" << endl;
-                        read_summary.params[2].at(m_name_str) = move(crt_pm_params);
-                    }
-                }
-                if (true or opts::scale_select_model_single_round)
-                {
-                    // note: always select model here if scaling strands together
-                    auto it_max = alg::max_of(
-                        model_fit,
-                        [] (const decltype(model_fit)::value_type& p) { return p.second; });
-                    read_summary.preferred_model[0] = it_max->first.first;
-                    read_summary.preferred_model[1] = it_max->first.second;
-                    model_list[0].assign({it_max->first.first});
-                    model_list[1].assign({it_max->first.second});
-                    LOG(debug)
-                        << "selected_model read [" << read_summary.read_id
-                        << "] strand [2] model [" << it_max->first.first + '+' + it_max->first.second << "]" << endl;
-                }
-                */
-                for (const auto& m_name_0 : model_list[0])
-                {
-                    for (const auto& m_name_1 : model_list[1])
-                    {
-                        auto m_name_str = m_name_0 + '+' + m_name_1;
-                        auto m_name = make_pair(m_name_0, m_name_1);
-                        // prepare vector of model pointers
-                        vector< const Pore_Model_Type* > model_ptrs;
-                        model_ptrs.insert(model_ptrs.end(), train_event_seqs[0].size(), &models.at(m_name_0));
-                        model_ptrs.insert(model_ptrs.end(), train_event_seqs[1].size(), &models.at(m_name_1));
+                        array< string, 2 > m_name_key = {{ m_name_0, m_name_1 }};
+                        string m_name = m_name_0 + "+" + m_name_1;
                         unsigned round = 0;
-                        Pore_Model_Parameters_Type& crt_pm_params = read_summary.pm_params[2].at(m_name_str);
-                        State_Transition_Parameters_Type& crt_st_params = read_summary.st_params[2].at(m_name_str);
-                        float& crt_fit = model_fit[m_name];
+                        auto& crt_pm_params = read_summary.pm_params_m.at(m_name_key);
+                        auto& crt_st_params = read_summary.st_params_m.at(m_name_key);
+                        float& crt_fit = model_fit[m_name_key];
                         crt_fit = -INFINITY;
                         while (true)
                         {
                             Pore_Model_Parameters_Type old_pm_params(crt_pm_params);
-                            State_Transition_Parameters_Type old_st_params(crt_st_params);
+                            std::array< State_Transition_Parameters_Type, 2 > old_st_params(crt_st_params);
                             float old_fit(crt_fit);
                             bool done;
 
-                            Model_Parameter_Trainer_Type::train_one_round(
-                                train_event_seq_ptrs, model_ptrs, default_transitions,
+                            Parameter_Trainer_Type::train_one_round(
+                                train_event_seq_ptrs,
+                                {{ &models.at(m_name_0), &models.at(m_name_1) }},
+                                default_transitions,
                                 old_pm_params, old_st_params,
                                 crt_pm_params, crt_st_params, crt_fit, done);
 
                             LOG(debug)
                                 << "scaling_round read [" << read_summary.read_id
                                 << "] strand [" << 2
-                                << "] model [" << m_name_str
+                                << "] model [" << m_name
                                 << "] old_pm_params [" << old_pm_params
-                                << "] old_st_params [" << old_st_params
+                                << "] old_st_params [" << old_st_params[0] << "," << old_st_params[1]
                                 << "] old_fit [" << old_fit
                                 << "] crt_pm_params [" << crt_pm_params
-                                << "] crt_st_params [" << crt_st_params
+                                << "] crt_st_params [" << crt_st_params[0] << "," << crt_st_params[1]
                                 << "] crt_fit [" << crt_fit
                                 << "] round [" << round << "]" << endl;
 
@@ -390,12 +346,12 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                             {
                                 LOG(info) << "scaling_regression read [" << read_summary.read_id
                                           << "] strand [" << 2
-                                          << "] model [" << m_name_str
+                                          << "] model [" << m_name
                                           << "] old_params [" << old_pm_params
-                                          << "] old_st_params [" << old_st_params
+                                          << "] old_st_params [" << old_st_params[0] << "," << old_st_params[1]
                                           << "] old_fit [" << old_fit
                                           << "] crt_pm_params [" << crt_pm_params
-                                          << "] crt_st_params [" << crt_st_params
+                                          << "] crt_st_params [" << crt_st_params[0] << "," << crt_st_params[1]
                                           << "] crt_fit [" << crt_fit
                                           << "] round [" << round << "]" << endl;
                                 crt_pm_params = old_pm_params;
@@ -416,9 +372,9 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                         LOG(info)
                             << "scaling_result read [" << read_summary.read_id
                             << "] strand [" << 2
-                            << "] model [" << m_name_str
+                            << "] model [" << m_name
                             << "] pm_params [" << crt_pm_params
-                            << "] st_params [" << crt_st_params
+                            << "] st_params [" << crt_st_params[0] << "," << crt_st_params[1]
                             << "] fit [" << crt_fit
                             << "] rounds [" << round << "]" << endl;
                     } // for m_name[1]
@@ -428,87 +384,58 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                     auto it_max = alg::max_of(
                         model_fit,
                         [] (const decltype(model_fit)::value_type& p) { return p.second; });
+                    // check maximum is unique
                     if (alg::all_of(
                             model_fit,
                             [&] (const decltype(model_fit)::value_type& p) {
-                                return p.first == it_max->first
+                                return &p == &*it_max
                                     or p.second + opts::scale_select_model_threshold.get() < it_max->second;
                             }))
                     {
-                        const auto& m_name_0 = it_max->first.first;
-                        const auto& m_name_1 = it_max->first.second;
-                        auto m_name_str = m_name_0 + '+' + m_name_1;
-                        read_summary.preferred_model[2] = m_name_str;
+                        const auto& m_name_0 = it_max->first[0];
+                        const auto& m_name_1 = it_max->first[1];
+                        auto m_name = m_name_0 + '+' + m_name_1;
+                        read_summary.preferred_model[2][0] = m_name_0;
+                        read_summary.preferred_model[2][1] = m_name_1;
                         LOG(info)
                             << "selected_model read [" << read_summary.read_id
-                            << "] strand [2] model [" << m_name_str << "]" << endl;
+                            << "] strand [2] model [" << m_name << "]" << endl;
                     }
                 }
             }
-            else // not opts::scale_strands_together
+            else // not scale_strands_together
             {
                 for (unsigned st = 0; st < 2; ++st)
                 {
                     // if not enough events, ignore strand
                     if (read_summary.events(st).size() < opts::min_read_len) continue;
                     // prepare vector of event sequences
-                    vector< const Event_Sequence_Type* > train_event_seq_ptrs;
+                    vector< pair< const Event_Sequence_Type*, unsigned > > train_event_seq_ptrs;
                     for (const auto& events : train_event_seqs[st])
                     {
-                        train_event_seq_ptrs.push_back(&events);
+                        train_event_seq_ptrs.push_back(make_pair(&events, st));
                     }
                     map< string, float > model_fit;
-                    /*
-                    // run fwbw for 1 round and update params
                     for (const auto& m_name : model_list[st])
                     {
-                        Pore_Model_Parameters_Type old_pm_params = read_summary.params[st].at(m_name);
-                        Pore_Model_Parameters_Type crt_pm_params;
-                        bool done;
-                        Model_Parameter_Trainer_Type::train_one_round(
-                            train_event_seq_ptrs, { &models.at(m_name) }, transitions,
-                            old_pm_params, crt_pm_params, model_fit[m_name], done);
-                        LOG(debug)
-                            << "scaling_round read [" << read_summary.read_id
-                            << "] strand [" << st
-                            << "] model [" << m_name
-                            << "] old_params [" << old_pm_params
-                            << "] old_fit [" << -INFINITY
-                            << "] crt_params [" << crt_pm_params
-                            << "] crt_fit [" << model_fit[m_name]
-                            << "] round [0]" << endl;
-                        read_summary.params[st].at(m_name) = move(crt_pm_params);
-                    }
-                    if (opts::scale_select_model_single_round)
-                    {
-                        auto it_max = alg::max_of(
-                            model_fit,
-                            [] (const decltype(model_fit)::value_type& p) { return p.second; });
-                        read_summary.preferred_model[st] = it_max->first;
-                        model_list[st].assign({it_max->first});
-                        LOG(debug)
-                            << "selected_model read [" << read_summary.read_id
-                            << "] strand [" << st
-                            << "] model [" << it_max->first << "]" << endl;
-                    }
-                    */
-                    // continue remaining training rounds
-                    for (const auto& m_name : model_list[st])
-                    {
+                        array< string, 2 > m_name_key;
+                        m_name_key[st] = m_name;
                         unsigned round = 0;
-                        Pore_Model_Parameters_Type& crt_pm_params = read_summary.pm_params[st].at(m_name);
-                        State_Transition_Parameters_Type& crt_st_params = read_summary.st_params[st].at(m_name);
+                        auto& crt_pm_params = read_summary.pm_params_m.at(m_name_key);
+                        auto& crt_st_params = read_summary.st_params_m.at(m_name_key);
                         float& crt_fit = model_fit[m_name];
                         crt_fit = -INFINITY;
                         while (true)
                         {
                             Pore_Model_Parameters_Type old_pm_params(crt_pm_params);
-                            State_Transition_Parameters_Type old_st_params(crt_st_params);
+                            array< State_Transition_Parameters_Type, 2 > old_st_params(crt_st_params);
                             float old_fit(crt_fit);
                             bool done;
 
-                            Model_Parameter_Trainer_Type::train_one_round(
-                                train_event_seq_ptrs, { &models.at(m_name) }, default_transitions,
+                            Parameter_Trainer_Type::train_one_round(
+                                train_event_seq_ptrs,
+                                {{ &models.at(m_name), &models.at(m_name) }},
+                                default_transitions,
                                 old_pm_params, old_st_params,
                                 crt_pm_params, crt_st_params, crt_fit, done);
 
@@ -517,10 +444,10 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                                 << "] strand [" << st
                                 << "] model [" << m_name
                                 << "] old_pm_params [" << old_pm_params
-                                << "] old_st_params [" << old_st_params
+                                << "] old_st_params [" << old_st_params[0] << "," << old_st_params[1]
                                 << "] old_fit [" << old_fit
                                 << "] crt_pm_params [" << crt_pm_params
-                                << "] crt_st_params [" << crt_st_params
+                                << "] crt_st_params [" << crt_st_params[0] << "," << crt_st_params[1]
                                 << "] crt_fit [" << crt_fit
                                 << "] round [" << round << "]" << endl;
 
@@ -536,10 +463,10 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                                           << "] strand [" << st
                                           << "] model [" << m_name
                                           << "] old_pm_params [" << old_pm_params
-                                          << "] old_st_params [" << old_st_params
+                                          << "] old_st_params [" << old_st_params[0] << "," << old_st_params[1]
                                           << "] old_fit [" << old_fit
                                           << "] crt_pm_params [" << crt_pm_params
-                                          << "] crt_st_params [" << crt_st_params
+                                          << "] crt_st_params [" << crt_st_params[0] << "," << crt_st_params[1]
                                           << "] crt_fit [" << crt_fit
                                           << "] round [" << round << "]" << endl;
                                 crt_pm_params = old_pm_params;
@@ -562,7 +489,7 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                             << "] strand [" << st
                             << "] model [" << m_name
                             << "] pm_params [" << crt_pm_params
-                            << "] st_params [" << crt_st_params
+                            << "] st_params [" << crt_st_params[0] << "," << crt_st_params[1]
                             << "] fit [" << crt_fit
                             << "] rounds [" << round << "]" << endl;
                     } // for m_name
@@ -574,11 +501,11 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                         if (alg::all_of(
                                 model_fit,
                                 [&] (const decltype(model_fit)::value_type& p) {
-                                    return p.first == it_max->first
+                                    return &p == &*it_max
                                         or p.second + opts::scale_select_model_threshold.get() < it_max->second;
                                 }))
                         {
-                            read_summary.preferred_model[st] = it_max->first;
+                            read_summary.preferred_model[st][st] = it_max->first;
                             LOG(info)
                                 << "selected_model read [" << read_summary.read_id
                                 << "] strand [" << st
@@ -636,7 +563,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
             Fast5_Summary_Type& read_summary = reads[i];
             if (read_summary.num_ed_events == 0) return;
             global_assert::global_msg() = read_summary.read_id;
-            read_summary.load_events(opts::scale_strands_together);
+            read_summary.load_events();
 
             // compute read statistics used to check scaling
             array< pair< float, float >, 2 > r_stats;
@@ -655,6 +582,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
             }
 
             // basecalling functor
+            // returns: (path_prob, base_seq)
             auto basecall_strand = [&] (unsigned st, string m_name,
                                         const Pore_Model_Parameters_Type& pm_params,
                                         const State_Transition_Parameters_Type& st_params) {
@@ -662,13 +590,16 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                 Pore_Model_Type pm(models.at(m_name));
                 pm.scale(pm_params);
                 State_Transitions_Type custom_transitions;
+                const State_Transitions_Type* transitions_ptr;
                 if (not st_params.is_default())
                 {
                     custom_transitions.compute_transitions_fast(st_params);
+                    transitions_ptr = &custom_transitions;
                 }
-                const State_Transitions_Type& transitions = (st_params.is_default()
-                                                             ? default_transitions
-                                                             : custom_transitions);
+                else
+                {
+                    transitions_ptr = &default_transitions;
+                }
                 LOG(info)
                     << "basecalling read [" << read_summary.read_id
                     << "] strand [" << st
@@ -695,17 +626,15 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                 Event_Sequence_Type corrected_events = read_summary.events(st);
                 corrected_events.apply_drift_correction(pm_params.drift);
                 Viterbi_Type vit;
-                vit.fill(pm, transitions, corrected_events);
+                vit.fill(pm, *transitions_ptr, corrected_events);
                 return std::make_tuple(vit.path_probability(), vit.base_seq());
             };
 
-            if (opts::scale_strands_together
-                and read_summary.events(0).size() >= opts::min_read_len
-                and read_summary.events(1).size() >= opts::min_read_len)
+            if (read_summary.scale_strands_together)
             {
                 // create list of models to try
-                list< string > model_sublist;
-                if (not read_summary.preferred_model[2].empty())
+                list< array< string, 2 > > model_sublist;
+                if (not read_summary.preferred_model[2][0].empty())
                 {
                     // if we have a preferred model, use that
                     model_sublist.push_back(read_summary.preferred_model[2]);
@@ -713,32 +642,29 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                 else
                 {
                     // no preferred model, try all for which we have scaling parameters
-                    for (const auto& p : read_summary.pm_params[2])
+                    for (const auto& p : read_summary.pm_params_m)
                     {
+                        if (p.first[0].empty() or p.first[1].empty()) continue;
                         model_sublist.push_back(p.first);
                     }
                 }
                 // basecall using applicable models
                 deque< tuple< float, float, float, string, string, string, string > > results;
-                for (const auto& m_name_str : model_sublist)
+                for (const auto& m_name : model_sublist)
                 {
-                    array< string, 2 > m_name;
-                    auto sep_idx = m_name_str.find('+');
-                    ASSERT(sep_idx != string::npos);
-                    m_name[0] = m_name_str.substr(0, sep_idx);
-                    m_name[1] = m_name_str.substr(sep_idx + 1);
                     array< tuple< float, string >, 2 > part_results;
                     for (unsigned st = 0; st < 2; ++st)
                     {
                         part_results[st] = basecall_strand(
                             st, m_name[st],
-                            read_summary.pm_params[2].at(m_name_str), read_summary.st_params[2].at(m_name_str));
+                            read_summary.pm_params_m.at(m_name),
+                            read_summary.st_params_m.at(m_name)[st]);
                     }
                     results.emplace_back(get<0>(part_results[0]) + get<0>(part_results[1]),
                                          get<0>(part_results[0]),
                                          get<0>(part_results[1]),
-                                         move(m_name[0]),
-                                         move(m_name[1]),
+                                         string(m_name[0]),
+                                         string(m_name[1]),
                                          move(get<1>(part_results[0])),
                                          move(get<1>(part_results[1])));
                 }
@@ -748,8 +674,8 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                 array< string, 2 > best_m_name{{ get<3>(results.back()), get<4>(results.back()) }};
                 array< const string*, 2 > base_seq_ptr{{ &get<5>(results.back()), &get<6>(results.back()) }};
                 string best_m_name_str = best_m_name[0] + '+' + best_m_name[1];
-                const Pore_Model_Parameters_Type& best_pm_params = read_summary.pm_params[2].at(best_m_name_str);
-                const State_Transition_Parameters_Type& best_st_params = read_summary.st_params[2].at(best_m_name_str);
+                auto& best_pm_params = read_summary.pm_params_m.at(best_m_name);
+                auto& best_st_params = read_summary.st_params_m.at(best_m_name);
                 for (unsigned st = 0; st < 2; ++st)
                 {
                     LOG(info)
@@ -757,11 +683,11 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                         << "] strand [" << st
                         << "] model [" << best_m_name[st]
                         << "] pm_params [" << best_pm_params
-                        << "] st_params [" << best_st_params
+                        << "] st_params [" << best_st_params[st]
                         << "] log_path_prob [" << best_log_path_prob[st] << "]" << endl;
-                    read_summary.preferred_model[st] = best_m_name[st];
-                    read_summary.pm_params[st][best_m_name[st]] = best_pm_params;
-                    read_summary.st_params[st][best_m_name[st]] = best_st_params;
+                    read_summary.preferred_model[st][st] = best_m_name[st];
+                    read_summary.pm_params_m[read_summary.preferred_model[st]] = best_pm_params;
+                    read_summary.st_params_m[read_summary.preferred_model[st]][st] = best_st_params[st];
                     ostringstream tmp;
                     tmp << read_summary.read_id << ":" << read_summary.base_file_name << ":" << st;
                     write_fasta(oss, tmp.str(), *base_seq_ptr[st]);
@@ -774,8 +700,8 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                     // if not enough events, ignore strand
                     if (read_summary.events(st).size() < opts::min_read_len) continue;
                     // create list of models to try
-                    list< string > model_sublist;
-                    if (not read_summary.preferred_model[st].empty())
+                    list< array< string, 2 > > model_sublist;
+                    if (not read_summary.preferred_model[st][st].empty())
                     {
                         // if we have a preferred model, use that
                         model_sublist.push_back(read_summary.preferred_model[st]);
@@ -783,31 +709,40 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                     else
                     {
                         // no preferred model, try all for which we have scaling
-                        for (const auto& p : read_summary.pm_params[st])
+                        for (const auto& p : read_summary.pm_params_m)
                         {
-                            model_sublist.push_back(p.first);
+                            if (not p.first[st].empty() and p.first[1 - st].empty())
+                            {
+                                model_sublist.push_back(p.first);
+                            }
                         }
                     }
                     // deque of results
                     deque< tuple< float, string, string > > results;
                     for (const auto& m_name : model_sublist)
                     {
+                        
                         auto r = basecall_strand(
-                            st, m_name,
-                            read_summary.pm_params[st].at(m_name), read_summary.st_params[st].at(m_name));
-                        results.emplace_back(get<0>(r), string(m_name), move(get<1>(r)));
+                            st, m_name[st],
+                            read_summary.pm_params_m.at(m_name),
+                            read_summary.st_params_m.at(m_name)[st]);
+                        results.emplace_back(get<0>(r),
+                                             string(m_name[st]),
+                                             move(get<1>(r)));
                     }
                     sort(results.begin(), results.end());
                     string& best_m_name = get<1>(results.back());
                     string& base_seq = get<2>(results.back());
+                    array< string, 2 > best_m_key;
+                    best_m_key[st] = best_m_name;
                     LOG(info)
                         << "best_model read [" << read_summary.read_id
                         << "] strand [" << st
                         << "] model [" << best_m_name
-                        << "] pm_params [" << read_summary.pm_params[st].at(best_m_name)
-                        << "] st_params [" << read_summary.st_params[st].at(best_m_name)
+                        << "] pm_params [" << read_summary.pm_params_m.at(best_m_key)
+                        << "] st_params [" << read_summary.st_params_m.at(best_m_key)[st]
                         << "] log_path_prob [" << get<0>(results.back()) << "]" << endl;
-                    read_summary.preferred_model[st] = best_m_name;
+                    read_summary.preferred_model[st][st] = best_m_name;
                     ostringstream tmp;
                     tmp << read_summary.read_id << ":" << read_summary.base_file_name << ":" << st;
                     write_fasta(oss, tmp.str(), base_seq);

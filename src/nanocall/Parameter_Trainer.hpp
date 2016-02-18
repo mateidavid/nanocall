@@ -1,5 +1,5 @@
-#ifndef __MODEL_PARAMETER_TRAINER
-#define __MODEL_PARAMETER_TRAINER
+#ifndef __PARAMETER_TRAINER
+#define __PARAMETER_TRAINER
 
 #include <array>
 #include <vector>
@@ -17,7 +17,7 @@
 #endif
 
 template < typename Float_Type = float, unsigned Kmer_Size = 6 >
-struct Model_Parameter_Trainer
+struct Parameter_Trainer
 {
     typedef Kmer< Kmer_Size > Kmer_Type;
     typedef Pore_Model< Float_Type, Kmer_Size > Pore_Model_Type;
@@ -30,8 +30,8 @@ struct Model_Parameter_Trainer
 
     static void init()
     {
-        // pick states i s.t. i has self-overlap 0, and all its 1-step neighbours
-        // have self-overlap <=1
+        // pick states i s.t. i has self-overlap 0,
+        // and all its 1-step neighbours have self-overlap <=1
         st_train_kmers().clear();
         for (unsigned i = 0; i < n_states; ++i)
         {
@@ -63,52 +63,85 @@ struct Model_Parameter_Trainer
         return _st_train_kmers;
     }
 
+    /**
+     * Perform one training round.
+     * @event_seq_ptrs Vector of pairs, first: an event sequence, second: strand from which it comes
+     * @model_ptrs Pointers to unscaled pore models (per strand)
+     * @default_transitions Default state transitions
+     * @crt_pm_params Pore model scaling parameters (common to both strands)
+     * @crt_st_params State transition parameters (per strand)
+     * @new_pm_params Destination for trained pm params (common to both strands)
+     * @new_st_params Destination for trained st params (per strand)
+     * @fit Destination for pr_data using crt params
+     * @done Bool; set to true if no more training rounds can be performed due to singularity.
+     */
     static void train_one_round(
-        const std::vector< const Event_Sequence_Type* >& event_seq_ptrs,
-        const std::vector< const Pore_Model_Type* >& model_ptrs,
+        const std::vector< std::pair< const Event_Sequence_Type*, unsigned > >& event_seq_ptrs,
+        const std::array< const Pore_Model_Type*, 2 >& model_ptrs,
         const State_Transitions_Type& default_transitions,
         const Pore_Model_Parameters_Type& crt_pm_params,
-        const State_Transition_Parameters_Type& crt_st_params,
+        const std::array< State_Transition_Parameters_Type, 2 >& crt_st_params,
         Pore_Model_Parameters_Type& new_pm_params,
-        State_Transition_Parameters_Type& new_st_params,
-        Float_Type& new_fit,
+        std::array< State_Transition_Parameters_Type, 2 >& new_st_params,
+        Float_Type& fit,
         bool& done)
     {
-        // accept either 1 model per sequence, or just 1 model
-        ASSERT(model_ptrs.size() == event_seq_ptrs.size() or model_ptrs.size() == 1);
-        bool single_model = model_ptrs.size() == 1;
+        // tags of event sequences must be 0/1
+        ASSERT(alg::all_of(
+                   event_seq_ptrs,
+                   [] (const std::pair< const Event_Sequence_Type*, unsigned >& p) {
+                       return p.second < 2;
+                   }));
         unsigned n_event_seqs = event_seq_ptrs.size();
         unsigned total_num_events = alg::accumulate(
             event_seq_ptrs, 0u,
-            [] (unsigned s, const Event_Sequence_Type* events_ptr) { return s + events_ptr->size(); });
+            [] (unsigned s, const std::pair< const Event_Sequence_Type*, unsigned >& p) {
+                return s + p.first->size();
+            });
         done = false;
-        // apply current scaling parameters, drift correction, and run fwbw
-        std::map< const Pore_Model_Type*, Pore_Model_Type > scaled_pm_map;
-        for (const auto pm_p : model_ptrs)
+        // compute scaled pore models
+        std::array< Pore_Model_Type, 2 > scaled_models;
+        std::array< bool, 2 > init_scaled_models = {{ false, false }};
+        for (const auto& p : event_seq_ptrs)
         {
-            if (scaled_pm_map.count(pm_p)) continue;
-            scaled_pm_map.emplace(std::make_pair(pm_p, *pm_p));
-            scaled_pm_map[pm_p].scale(crt_pm_params);
+            if (init_scaled_models[p.second]) continue;
+            ASSERT(model_ptrs[p.second]);
+            scaled_models[p.second] = *model_ptrs[p.second];
+            scaled_models[p.second].scale(crt_pm_params);
+            init_scaled_models[p.second] = true;
         }
-        State_Transitions_Type custom_transitions;
-        if (not crt_st_params.is_default())
+        // compute custom state transitions
+        std::array< State_Transitions_Type, 2 > custom_transitions;
+        std::array< const State_Transitions_Type*, 2 > transition_ptrs;
+        std::array< bool, 2 > init_transitions = {{ false, false }};
+        for (const auto& p : event_seq_ptrs)
         {
-            custom_transitions.compute_transitions_fast(crt_st_params);
+            if (init_transitions[p.second]) continue;
+            if (not crt_st_params[p.second].is_default())
+            {
+                custom_transitions[p.second].compute_transitions_fast(crt_st_params[p.second]);
+                transition_ptrs[p.second] = &custom_transitions[p.second];
+            }
+            else
+            {
+                transition_ptrs[p.second] = &default_transitions;
+            }
+            init_transitions[p.second] = true;
         }
-        const State_Transitions_Type& transitions = (crt_st_params.is_default()
-                                                     ? default_transitions
-                                                     : custom_transitions);
+        // compute drift-corrected event sequences, and run fwbw
         std::vector< Event_Sequence_Type > corrected_event_seqs(n_event_seqs);
         std::vector< Forward_Backward_Type > fwbw(n_event_seqs);
-        new_fit = 0;
+        fit = 0;
         for (unsigned k = 0; k < n_event_seqs; ++k)
         {
-            const Pore_Model_Type& scaled_pm = scaled_pm_map.at(model_ptrs[single_model? 0 : k]);
+            unsigned st = event_seq_ptrs[k].second;
+            ASSERT(init_scaled_models[st]);
+            ASSERT(init_transitions[st]);
             Event_Sequence_Type& corrected_events = corrected_event_seqs[k];
-            corrected_events = *event_seq_ptrs[k];
+            corrected_events = *event_seq_ptrs[k].first;
             corrected_events.apply_drift_correction(crt_pm_params.drift);
-            fwbw[k].fill(scaled_pm, transitions, corrected_events);
-            new_fit += fwbw[k].log_pr_data();
+            fwbw[k].fill(scaled_models[st], *transition_ptrs[st], corrected_events);
+            fit += fwbw[k].log_pr_data();
         }
         // compute the scaling matrices (first in logspace)
         // against unscaled pm & uncorrected events
@@ -119,8 +152,9 @@ struct Model_Parameter_Trainer
         std::array< LogSumSet_Type, 3 > B_lss = {{ false, false, false }};
         for (unsigned k = 0; k < n_event_seqs; ++k)
         {
-            const Event_Sequence_Type& events = *event_seq_ptrs[k];
-            const Pore_Model_Type& pm = *model_ptrs[single_model? 0 : k];
+            unsigned st = event_seq_ptrs[k].second;
+            const Event_Sequence_Type& events = *event_seq_ptrs[k].first;
+            const Pore_Model_Type& pm = *model_ptrs[st];
             unsigned n_events = events.size();
             for (unsigned i = 0; i < n_events; ++i)
             {
@@ -261,8 +295,9 @@ struct Model_Parameter_Trainer
 #endif
             for (unsigned k = 0; k < n_event_seqs; ++k)
             {
-                const Event_Sequence_Type& events = *event_seq_ptrs[k];
-                const Pore_Model_Type& pm = *model_ptrs[single_model? 0 : k];
+                unsigned st = event_seq_ptrs[k].second;
+                const Event_Sequence_Type& events = *event_seq_ptrs[k].first;
+                const Pore_Model_Type& pm = *model_ptrs[st];
                 unsigned n_events = events.size();
                 for (unsigned i = 0; i < n_events; ++i)
                 {
@@ -305,22 +340,21 @@ struct Model_Parameter_Trainer
                 << "var_solution " << new_pm_params.var << std::endl;
         }
         //
-        // train p_stay, p_skip
+        // train p_stay & p_skip, separately for each strand
         //
+        for (unsigned st = 0; st < 2; ++st)
         {
             LogSumSet_Type s_p_stay_num(false);
             LogSumSet_Type s_p_skip_num(false);
             LogSumSet_Type s_denom(false);
-            float log_p_stay = std::log(crt_st_params.p_stay);
-            float log_p_step_4 = std::log(1 - crt_st_params.p_stay - crt_st_params.p_skip) - std::log(4.0);
+            float log_p_stay = std::log(crt_st_params[st].p_stay);
+            float log_p_step_4 = std::log(1 - crt_st_params[st].p_stay - crt_st_params[st].p_skip) - std::log(4.0);
             for (unsigned k = 0; k < n_event_seqs; ++k)
             {
-                const Event_Sequence_Type& events = *event_seq_ptrs[k];
-                unsigned n_events = events.size();
-                const Pore_Model_Type& pm = *model_ptrs[single_model? 0 : k];
-                const Pore_Model_Type& scaled_pm = scaled_pm_map.at(model_ptrs[single_model? 0 : k]);
+                if (event_seq_ptrs[k].second != st) continue;
+                const Pore_Model_Type& scaled_pm = scaled_models[st];
                 Event_Sequence_Type& corrected_events = corrected_event_seqs[k];
-
+                unsigned n_events = corrected_events.size();
                 //
                 // P[S_i = j1, S_{i+1} = j2]
                 //
@@ -330,7 +364,6 @@ struct Model_Parameter_Trainer
                         + scaled_pm.log_pr_emission(j2, corrected_events[i + 1])
                         + fwbw[k].cell(i + 1, j2).beta
                         - fwbw[k].log_pr_data();
-                    //- fwbw[k].log_posterior(i, j1));
                     LOG(debug2) << "step_prob k=" << k
                                 << " i=" << i
                                 << " j1=" << Kmer_Type::to_string(j1)
@@ -373,25 +406,26 @@ struct Model_Parameter_Trainer
                     }
                 }
             }
-            new_st_params.p_stay = std::exp(s_p_stay_num.val() - s_denom.val());
-            new_st_params.p_skip = std::exp(s_p_skip_num.val() - s_denom.val());
-            if (new_st_params.p_stay < .05 or new_st_params.p_stay > .4
-                or new_st_params.p_skip < .05 or new_st_params.p_skip > .4)
+            new_st_params[st].p_stay = std::exp(s_p_stay_num.val() - s_denom.val());
+            new_st_params[st].p_skip = std::exp(s_p_skip_num.val() - s_denom.val());
+            if (new_st_params[st].p_stay < .05 or new_st_params[st].p_stay > .4
+                or new_st_params[st].p_skip < .05 or new_st_params[st].p_skip > .4)
             {
                 State_Transition_Parameters_Type alt_st_params;
-                alt_st_params.p_stay = std::max(new_st_params.p_stay, .05f);
+                alt_st_params.p_stay = std::max(new_st_params[st].p_stay, .05f);
                 alt_st_params.p_stay = std::min(alt_st_params.p_stay, .4f);
-                alt_st_params.p_skip = std::max(new_st_params.p_skip, .05f);
+                alt_st_params.p_skip = std::max(new_st_params[st].p_skip, .05f);
                 alt_st_params.p_skip = std::min(alt_st_params.p_skip, .4f);
-                LOG(warning) << "unusual state transition parameters " << new_st_params
-                             << " resetting them to " << alt_st_params << std::endl;
-                std::swap(alt_st_params, new_st_params);
+                LOG(warning) << "unusual state transition parameters " << new_st_params[st]
+                             << " for strand [" << st
+                             << "] resetting them to " << alt_st_params << std::endl;
+                std::swap(alt_st_params, new_st_params[st]);
             }
         }
     } // train_one_round
 
-}; // class Model_Parameter_Trainer
+}; // class Parameter_Trainer
 
-typedef Model_Parameter_Trainer<> Model_Parameter_Trainer_Type;
+typedef Parameter_Trainer<> Parameter_Trainer_Type;
 
 #endif
