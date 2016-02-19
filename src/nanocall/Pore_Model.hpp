@@ -156,6 +156,7 @@ public:
     static const unsigned n_states = 1u << (2 * Kmer_Size);
 
     Pore_Model() : _strand(2) {}
+    void clear() { _state.clear(); }
 
     const Pore_Model_State_Type& state(unsigned i) const { return _state.at(i); }
     Pore_Model_State_Type& state(unsigned i) { return _state.at(i); }
