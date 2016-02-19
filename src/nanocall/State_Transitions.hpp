@@ -70,6 +70,7 @@ public:
     static const unsigned n_states = 1u << (2 * Kmer_Size);
 
     State_Transitions() = default;
+    void clear() { _neighbours.clear(); }
 
     const State_Neighbours_Type& neighbours(unsigned i) const { return _neighbours.at(i); }
     State_Neighbours_Type& neighbours(unsigned i) { return _neighbours.at(i); }
