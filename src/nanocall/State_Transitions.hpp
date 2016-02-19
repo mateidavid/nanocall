@@ -69,8 +69,7 @@ public:
     typedef State_Transition_Parameters< Float_Type > State_Transition_Parameters_Type;
     static const unsigned n_states = 1u << (2 * Kmer_Size);
 
-    State_Transitions() { _neighbours.resize(n_states); }
-    void clear() { _neighbours.clear(); _neighbours.resize(n_states); }
+    State_Transitions() = default;
 
     const State_Neighbours_Type& neighbours(unsigned i) const { return _neighbours.at(i); }
     State_Neighbours_Type& neighbours(unsigned i) { return _neighbours.at(i); }
@@ -147,9 +146,11 @@ public:
     void compute_transitions(Float_Type p_skip_default, Float_Type p_stay, Float_Type p_cutoff,
                              const std::map< unsigned, Float_Type >& p_skip_map = {})
     {
-        clear();
+        _neighbours.clear();
+        _neighbours.reserve(n_states);
         for (unsigned i = 0; i < n_states; ++i)
         {
+            _neighbours.emplace_back();
             Float_Type p_skip = p_skip_default;
             if (p_skip_map.count(i))
             {
@@ -185,9 +186,11 @@ public:
             Float_Type val;
         }; // struct Default_Float
 
-        clear();
+        _neighbours.clear();
+        _neighbours.reserve(n_states);
         for (unsigned i = 0; i < n_states; ++i)
         {
+            _neighbours.emplace_back();
             Float_Type p_skip = p_skip_default;
             if (p_skip_map.count(i))
             {
@@ -232,7 +235,8 @@ public:
     }
     friend std::istream& operator >> (std::istream& is, State_Transitions& st)
     {
-        st.clear();
+        st._neighbours.clear();
+        st._neighbours.resize(n_states);
         std::string k_i;
         std::string k_j;
         Float_Type p;

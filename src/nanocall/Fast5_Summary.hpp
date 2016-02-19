@@ -155,8 +155,8 @@ public:
                     break;
                 }
                 scale_strands_together = (sst
-                                          and events(0).size() >= min_read_len()
-                                          and events(1).size() >= min_read_len());
+                                          and strand_bounds[1] - strand_bounds[0] >= min_read_len()
+                                          and strand_bounds[3] - strand_bounds[2] >= min_read_len());
                 // compute time lengths
                 load_events(&f);
                 for (unsigned st = 0; st < 2; ++st)
@@ -188,7 +188,7 @@ public:
                                                        + r1.first - pm_params.scale * p1.second.mean()) / 2;
                                     LOG("Fast5_Summary", debug)
                                         << "initial_scaling read [" << read_id
-                                        << "] model [" << m_name[0] << "+" << m_name[1]
+                                        << "] strand [2] model [" << m_name[0] << "+" << m_name[1]
                                         << "] pm_params [" << pm_params << "]" << std::endl;
                                     pm_params_m[m_name] = std::move(pm_params);
                                     st_params_m[m_name][0] = State_Transition_Parameters_Type();
@@ -214,7 +214,8 @@ public:
                                 pm_params.shift = r.first - pm_params.scale * p.second.mean();
                                 LOG("Fast5_Summary", debug)
                                     << "initial_scaling read [" << read_id
-                                    << "] model [" << m_name[0] << "+" << m_name[1]
+                                    << "] strand [" << st
+                                    << "] model [" << m_name[st]
                                     << "] pm_params [" << pm_params << "]" << std::endl;
                                 pm_params_m[m_name] = std::move(pm_params);
                                 st_params_m[m_name][st] = State_Transition_Parameters_Type();

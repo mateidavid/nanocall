@@ -155,8 +155,7 @@ public:
     typedef Pore_Model_Parameters< Float_Type > Pore_Model_Parameters_Type;
     static const unsigned n_states = 1u << (2 * Kmer_Size);
 
-    Pore_Model() : _state(n_states), _strand(2) {}
-    void clear() { _state.clear(); _state.resize(n_states); }
+    Pore_Model() : _strand(2) {}
 
     const Pore_Model_State_Type& state(unsigned i) const { return _state.at(i); }
     Pore_Model_State_Type& state(unsigned i) { return _state.at(i); }
@@ -181,8 +180,11 @@ public:
         assert(f.have_model(strand));
         auto m = f.get_model(strand);
         assert(m.size() == n_states);
+        _state.clear();
+        _state.reserve(n_states);
         for (unsigned i = 0; i < n_states; ++i)
         {
+            _state.emplace_back();
             state(i) = m.at(i);
         }
         update_statistics();
@@ -192,8 +194,11 @@ public:
     void load_from_vector(const std::vector< float >& v)
     {
         assert(v.size() == n_states * 4);
+        _state.clear();
+        _state.reserve(n_states);
         for (unsigned i = 0; i < n_states; ++i)
         {
+            _state.emplace_back();
             state(i).level_mean = v[4 * i + 0];
             state(i).level_stdv = v[4 * i + 1];
             state(i).sd_mean = v[4 * i + 2];

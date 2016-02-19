@@ -444,10 +444,10 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                                 << "] strand [" << st
                                 << "] model [" << m_name
                                 << "] old_pm_params [" << old_pm_params
-                                << "] old_st_params [" << old_st_params[0] << "," << old_st_params[1]
+                                << "] old_st_params [" << old_st_params[st]
                                 << "] old_fit [" << old_fit
                                 << "] crt_pm_params [" << crt_pm_params
-                                << "] crt_st_params [" << crt_st_params[0] << "," << crt_st_params[1]
+                                << "] crt_st_params [" << crt_st_params[st]
                                 << "] crt_fit [" << crt_fit
                                 << "] round [" << round << "]" << endl;
 
@@ -463,10 +463,10 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                                           << "] strand [" << st
                                           << "] model [" << m_name
                                           << "] old_pm_params [" << old_pm_params
-                                          << "] old_st_params [" << old_st_params[0] << "," << old_st_params[1]
+                                          << "] old_st_params [" << old_st_params[st]
                                           << "] old_fit [" << old_fit
                                           << "] crt_pm_params [" << crt_pm_params
-                                          << "] crt_st_params [" << crt_st_params[0] << "," << crt_st_params[1]
+                                          << "] crt_st_params [" << crt_st_params[st]
                                           << "] crt_fit [" << crt_fit
                                           << "] round [" << round << "]" << endl;
                                 crt_pm_params = old_pm_params;
@@ -489,7 +489,7 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                             << "] strand [" << st
                             << "] model [" << m_name
                             << "] pm_params [" << crt_pm_params
-                            << "] st_params [" << crt_st_params[0] << "," << crt_st_params[1]
+                            << "] st_params [" << crt_st_params[st]
                             << "] fit [" << crt_fit
                             << "] rounds [" << round << "]" << endl;
                     } // for m_name
