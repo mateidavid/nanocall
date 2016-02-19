@@ -382,7 +382,7 @@ struct Parameter_Trainer
                         s_denom.add(log_p_j1);
                         // Pr[ S_i = j1, S_{i+1} = j1 ]
                         float log_p_j1_j1 = log_joint_prob(i, j1, j1, log_p_stay);
-                        ASSERT(log_p_j1_j1 <= log_p_j1 + 1.0e-3);
+                        ASSERT(log_p_j1_j1 / log_p_j1 <= 1.0 + 1.0e-3);
                         s_p_stay_num.add(log_p_j1_j1);
                         // Pr[ S_i = j1, dist(j1,S_{i+1}) > 1 ]
                         float log_p_j1_d01;
@@ -396,7 +396,7 @@ struct Parameter_Trainer
                             }
                             log_p_j1_d01 = s2.val();
                         }
-                        ASSERT(log_p_j1_d01 <= log_p_j1 + 1.0e-3);
+                        ASSERT(log_p_j1_d01 / log_p_j1 <= 1.0 + 1.0e-3);
                         float p_j1_d2 = std::exp(log_p_j1) - std::exp(log_p_j1_d01);
                         if (p_j1_d2 < 0.0)
                         {
