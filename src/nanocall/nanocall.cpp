@@ -39,8 +39,10 @@ namespace opts
     ValueArg< float > scale_min_fit_progress("", "scale-min-fit-progress", "Minimum scaling fit progress.", false, 1.0, "float", cmd_parser);
     ValueArg< unsigned > scale_max_rounds("", "scale-max-rounds", "Maximum scaling rounds.", false, 10, "int", cmd_parser);
     ValueArg< unsigned > scale_num_events("", "scale-num-events", "Number of events used for model scaling.", false, 200, "int", cmd_parser);
-    SwitchArg scale_only("", "scale-only", "Stop after computing model scalings.", cmd_parser);
-    SwitchArg accurate_scaling("", "accurate", "Compute model scalings more accurately.", cmd_parser);
+    SwitchArg train_only("", "train-only", "Stop after training.", cmd_parser);
+    SwitchArg train_transitions("", "no-train-transitions", "Do not train state transitions.", cmd_parser, true);
+    SwitchArg train_scaling("", "no-train-scaling", "Do not train pore model scaling.", cmd_parser, true);
+    SwitchArg accurate("", "accurate", "Compute model scalings more accurately.", cmd_parser);
     ValueArg< float > pr_cutoff("", "pr-cutoff", "Minimum value for transition probabilities; smaller values are set to zero.", false, .001, "float", cmd_parser);
     ValueArg< float > pr_skip("", "pr-skip", "Transition probability of skipping at least 1 state.", false, .28, "float", cmd_parser);
     ValueArg< float > pr_stay("", "pr-stay", "Transition probability of staying in the same state.", false, .09, "float", cmd_parser);
@@ -322,7 +324,8 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                                 {{ &models.at(m_name_0), &models.at(m_name_1) }},
                                 default_transitions,
                                 old_pm_params, old_st_params,
-                                crt_pm_params, crt_st_params, crt_fit, done);
+                                crt_pm_params, crt_st_params, crt_fit, done,
+                                opts::train_scaling, opts::train_transitions);
 
                             LOG(debug)
                                 << "scaling_round read [" << read_summary.read_id
@@ -437,7 +440,8 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                                 {{ &models.at(m_name), &models.at(m_name) }},
                                 default_transitions,
                                 old_pm_params, old_st_params,
-                                crt_pm_params, crt_st_params, crt_fit, done);
+                                crt_pm_params, crt_st_params, crt_fit, done,
+                                opts::train_scaling, opts::train_transitions);
 
                             LOG(debug)
                                 << "scaling_round read [" << read_summary.read_id
@@ -772,12 +776,12 @@ int real_main()
     init_transitions(default_transitions);
     init_files(files);
     init_reads(models, files, reads);
-    if (opts::accurate_scaling)
+    if (opts::accurate)
     {
         // do some rescaling
         rescale_reads(models, default_transitions, reads);
     }
-    if (not opts::scale_only)
+    if (not opts::train_only)
     {
         // basecall reads
         basecall_reads(models, default_transitions, reads);
@@ -822,10 +826,12 @@ int main(int argc, char * argv[])
             << "invalid scale_select_model_threshold: " << opts::scale_select_model_threshold.get() << endl;
         return EXIT_FAILURE;
     }
-    LOG(info) << "options rescaling=" << opts::accurate_scaling.get() << endl;
-    if (opts::accurate_scaling)
+    LOG(info) << "options training=" << opts::accurate.get() << endl;
+    if (opts::accurate)
     {
-        LOG(info) << "options scale_strands_together=" << opts::scale_strands_together.get()
+        LOG(info) << "options train_scaling=" << opts::train_scaling.get()
+                  << " train_transitions=" << opts::train_transitions.get()
+                  << " scale_strands_together=" << opts::scale_strands_together.get()
                   << " scale_num_events=" << opts::scale_num_events.get()
                   << " scale_max_rounds=" << opts::scale_max_rounds.get()
                   << " scale_min_fit_progress=" << opts::scale_min_fit_progress.get()

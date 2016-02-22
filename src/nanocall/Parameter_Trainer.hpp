@@ -212,6 +212,7 @@ struct Parameter_Trainer
                 ofs << std::endl;
             }
         }
+        abort();
 #endif
     }
 
@@ -551,7 +552,9 @@ struct Parameter_Trainer
         Pore_Model_Parameters_Type& new_pm_params,
         std::array< State_Transition_Parameters_Type, 2 >& new_st_params,
         Float_Type& fit,
-        bool& done)
+        bool& done,
+        bool train_scaling,
+        bool train_transitions)
     {
         // initialize training data
         Train_Data data;
@@ -563,15 +566,21 @@ struct Parameter_Trainer
         // fill the training data
         fill_train_data(data);
         fit = data.fit;
-        // train pm params
-        train_pm_params(data, new_pm_params, done);
-        if (done)
+        if (train_scaling)
         {
-            new_st_params = crt_st_params;
-            return;
+            // train pm params
+            train_pm_params(data, new_pm_params, done);
+            if (done)
+            {
+                new_st_params = crt_st_params;
+                return;
+            }
         }
-        // train st params
-        train_st_params(data, new_st_params);
+        if (train_transitions)
+        {
+            // train st params
+            train_st_params(data, new_st_params);
+        }
 /*
         // tags of event sequences must be 0/1
         ASSERT(alg::all_of(
