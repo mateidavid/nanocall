@@ -142,19 +142,77 @@ struct Parameter_Trainer
             data.corrected_event_seq_v.emplace_back(*data.event_seq_ptr_v[k].first);
             // then, apply drift correction
             data.corrected_event_seq_v.back().apply_drift_correction(data.pm_params_ptr->drift);
-        }
-        // run fwbw
-        data.fwbw_v.clear();
-        data.fwbw_v.reserve(n_event_seqs);
-        data.fit = 0.0;
-        for (unsigned k = 0; k < n_event_seqs; ++k)
-        {
-            unsigned st = data.event_seq_ptr_v[k].second;
+            // finally, run fwbw
             data.fwbw_v.emplace_back();
             data.fwbw_v.back().fill(
                 data.scaled_model_v[st], *data.transitions_ptr_v[st], data.corrected_event_seq_v.back());
             data.fit += data.fwbw_v.back().log_pr_data();
         }
+#ifdef DUMP_TRAINING_DATA
+        for (unsigned k = 0; k < n_event_seqs; ++k)
+        {
+            unsigned st = data.event_seq_ptr_v[k].second;
+            unsigned n_events = data.event_seq_ptr_v[k].first->size();
+            std::ostringstream k_sstr;
+            k_sstr << k;
+            std::ofstream ofs;
+            ofs.open(std::string("emissions.") + k_sstr.str() + ".tab");
+            for (unsigned i = 0; i < n_events; ++i)
+            {
+                for (unsigned j = 0; j < n_states; ++j)
+                {
+                    if (j > 0) ofs << '\t';
+                    ofs << data.scaled_model_v[st].log_pr_emission(j, data.corrected_event_seq_v[k][i]);
+                }
+                ofs << std::endl;
+            }
+            ofs.close();
+            ofs.open(std::string("transitions.") + k_sstr.str() + ".tab");
+            for (unsigned j1 = 0; j1 < n_states; ++j1)
+            {
+                std::map< unsigned, float > neighbour_m;
+                for (const auto& p : data.transitions_ptr_v[st]->neighbours(j1).to_v)
+                {
+                    neighbour_m[p.first] = p.second;
+                }
+                for (unsigned j2 = 0; j2 < n_states; ++j2)
+                {
+                    if (j2 > 0) ofs << '\t';
+                    if (neighbour_m.count(j2))
+                    {
+                        ofs << neighbour_m.at(j2);
+                    }
+                    else
+                    {
+                        ofs << -1000.0;
+                    }
+                }
+                ofs << std::endl;
+            }
+            ofs.close();
+            ofs.open(std::string("fw.") + k_sstr.str() + ".tab");
+            for (unsigned i = 0; i < n_events; ++i)
+            {
+                for (unsigned j = 0; j < n_states; ++j)
+                {
+                    if (j > 0) ofs << '\t';
+                    ofs << data.fwbw_v[k].cell(i, j).alpha;
+                }
+                ofs << std::endl;
+            }
+            ofs.close();
+            ofs.open(std::string("bw.") + k_sstr.str() + ".tab");
+            for (unsigned i = 0; i < n_events; ++i)
+            {
+                for (unsigned j = 0; j < n_states; ++j)
+                {
+                    if (j > 0) ofs << '\t';
+                    ofs << data.fwbw_v[k].cell(i, j).beta;
+                }
+                ofs << std::endl;
+            }
+        }
+#endif
     }
 
     /**
@@ -425,7 +483,11 @@ struct Parameter_Trainer
                         float log_p_j1_j1 = log_joint_prob(i, j1, j1, log_p_stay);
                         if (log_p_j1_j1 > log_p_j1)
                         {
-                            ASSERT(log_p_j1_j1 < log_p_j1 + std::max(std::abs(log_p_j1), 1.0f) * 1.0e-3);
+                            if (log_p_j1_j1 > log_p_j1 + std::max(std::abs(log_p_j1), 1.0f) * 1.0e-3)
+                            {
+                                LOG(warning) << "numerical error log_p_j1 [" << log_p_j1
+                                             << "] log_p_j1_j1 [" << log_p_j1_j1 << "]" << std::endl;
+                            }
                             log_p_j1_j1 = log_p_j1;
                         }
                         s_p_stay_num.add(log_p_j1_j1);
@@ -443,7 +505,11 @@ struct Parameter_Trainer
                         }
                         if (log_p_j1_d01 > log_p_j1)
                         {
-                            ASSERT(log_p_j1_d01 < log_p_j1 + std::max(std::abs(log_p_j1), 1.0f) * 1.0e-3);
+                            if (log_p_j1_d01 > log_p_j1 + std::max(std::abs(log_p_j1), 1.0f) * 1.0e-3)
+                            {
+                                LOG(warning) << "numerical error log_p_j1 [" << log_p_j1
+                                             << "] log_p_j1_d01 [" << log_p_j1_d01 << "]" << std::endl;
+                            }
                             log_p_j1_d01 = log_p_j1;
                         }
                         float p_j1_d2 = std::exp(log_p_j1) - std::exp(log_p_j1_d01);
