@@ -11,6 +11,15 @@
 
 using namespace std;
 
+#ifndef FLOAT_TYPE
+#define FLOAT_TYPE float
+#endif
+typedef State_Transitions< FLOAT_TYPE > State_Transitions_Type;
+typedef Pore_Model< FLOAT_TYPE > Pore_Model_Type;
+typedef Event< FLOAT_TYPE > Event_Type;
+typedef Event_Sequence< FLOAT_TYPE > Event_Sequence_Type;
+typedef Viterbi< FLOAT_TYPE > Viterbi_Type;
+
 namespace opts
 {
     using namespace TCLAP;
@@ -25,21 +34,21 @@ namespace opts
 
 void real_main()
 {
-    Pore_Model<> pm;
-    State_Transitions<> st;
-    Event_Sequence<> ev;
+    Pore_Model_Type pm;
+    State_Transitions_Type st;
+    Event_Sequence_Type ev;
     zstr::ifstream(opts::pm_file_name) >> pm;
     zstr::ifstream(opts::st_file_name) >> st;
     {
         zstr::ifstream ifs(opts::ev_file_name);
-        Event<> e;
+        Event_Type e;
         while (ifs >> e)
         {
             ev.push_back(e);
         }
     }
 
-    Viterbi<> vit;
+    Viterbi_Type vit;
     vit.fill(pm, st, ev);
     cout << vit.base_seq() << std::endl;
 }

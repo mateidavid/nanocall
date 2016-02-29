@@ -10,7 +10,7 @@
 #include "logger.hpp"
 #include "alg.hpp"
 
-template < typename Float_Type = float >
+template < typename Float_Type >
 class Event
 {
 public:
@@ -46,7 +46,7 @@ public:
     }
 }; // class Event
 
-template < typename Float_Type = float >
+template < typename Float_Type >
 struct Event_Sequence
     : std::deque< Event< Float_Type > >
 {
@@ -61,8 +61,5 @@ struct Event_Sequence
         }
     }
 }; // struct Event_Sequence
-
-typedef Event<> Event_Type;
-typedef Event_Sequence<> Event_Sequence_Type;
 
 #endif

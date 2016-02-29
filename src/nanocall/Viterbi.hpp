@@ -11,7 +11,7 @@
 #include "logsumset.hpp"
 #include "logger.hpp"
 
-template < typename Float_Type = float, unsigned Kmer_Size = 6 >
+template < typename Float_Type, unsigned Kmer_Size = 6 >
 class Viterbi
 {
 public:
@@ -51,7 +51,7 @@ public:
         unsigned n_events = ev.size();
         _m.resize(n_states * n_events);
         _state_seq.resize(n_events);
-        float log_n_states = std::log(static_cast< float >(n_states));
+        Float_Type log_n_states = std::log(static_cast< Float_Type >(n_states));
         //
         // alpha, beta; i == 0
         //
@@ -158,7 +158,5 @@ private:
     }
 
 }; // class Viterbi
-
-typedef Viterbi<> Viterbi_Type;
 
 #endif

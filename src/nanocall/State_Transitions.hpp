@@ -11,7 +11,7 @@
 #include "logsumset.hpp"
 #include "logger.hpp"
 
-template < typename Float_Type = float, unsigned Kmer_Size = 6 >
+template < typename Float_Type, unsigned Kmer_Size = 6 >
 struct State_Transition_Parameters
 {
     Float_Type p_stay;
@@ -50,7 +50,7 @@ struct State_Transition_Parameters
     }
 }; // struct State_Transition_Parameters
 
-template < typename Float_Type = float >
+template < typename Float_Type >
 struct State_Neighbours
 {
     State_Neighbours() : p_rest_from(-INFINITY), p_rest_to(-INFINITY) {}
@@ -60,7 +60,7 @@ struct State_Neighbours
     Float_Type p_rest_to;
 }; // struct State_Neighbours
 
-template < typename Float_Type = float, unsigned Kmer_Size = 6 >
+template < typename Float_Type, unsigned Kmer_Size = 6 >
 class State_Transitions
 {
 public:
@@ -254,8 +254,5 @@ public:
 private:
     std::vector< State_Neighbours_Type > _neighbours;
 }; // class State_Transitions
-
-typedef State_Transition_Parameters<> State_Transition_Parameters_Type;
-typedef State_Transitions<> State_Transitions_Type;
 
 #endif

@@ -39,7 +39,7 @@ inline Float_Type log_invgauss_pdf(Float_Type x, Float_Type log_x,
     return (log_lambda - log_2pi - static_cast< Float_Type >(3.0) * log_x - lambda * a * a / x) / static_cast< Float_Type >(2.0);
 }
 
-template < typename Float_Type = float >
+template < typename Float_Type >
 struct Pore_Model_Parameters
 {
     Pore_Model_Parameters() : scale(1.0), shift(0.0), drift(0.0), var(1.0), scale_sd(1.0), var_sd(1.0) {}
@@ -76,7 +76,7 @@ struct Pore_Model_Parameters
     }
 }; // struct Pore_Model_Parameters
 
-template < typename Float_Type = float >
+template < typename Float_Type >
 struct Pore_Model_State
 {
     typedef Event< Float_Type > Event_Type;
@@ -90,6 +90,7 @@ struct Pore_Model_State
 
     Float_Type log_level_mean;
     Float_Type log_level_stdv;
+    Float_Type log_sd_mean;
     Float_Type log_sd_stdv;
     Float_Type log_sd_lambda;
 
@@ -115,6 +116,7 @@ struct Pore_Model_State
     {
         log_level_mean = std::log(level_mean);
         log_level_stdv = std::log(level_stdv);
+        log_sd_mean = std::log(sd_mean);
         log_sd_lambda = std::log(sd_lambda);
     }
 
@@ -145,7 +147,7 @@ struct Pore_Model_State
     }
 }; // struct Pore_Model_State
 
-template < typename Float_Type = float, unsigned Kmer_Size = 6 >
+template < typename Float_Type, unsigned Kmer_Size = 6 >
 class Pore_Model
 {
 public:
@@ -192,7 +194,8 @@ public:
     }
 
     // load from vector
-    void load_from_vector(const std::vector< float >& v)
+    template < typename V_Float_Type >
+    void load_from_vector(const std::vector< V_Float_Type >& v)
     {
         assert(v.size() == n_states * 4);
         _state.clear();
@@ -260,8 +263,7 @@ private:
     }
 }; // class Pore_Model
 
-typedef Pore_Model<> Pore_Model_Type;
-typedef Pore_Model_Parameters<> Pore_Model_Parameters_Type;
-typedef std::map< std::string, Pore_Model_Type > Pore_Model_Dict_Type;
+template < typename Float_Type >
+using Pore_Model_Dict = std::map< std::string, Pore_Model< Float_Type > >;
 
 #endif

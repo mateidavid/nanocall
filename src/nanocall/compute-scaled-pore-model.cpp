@@ -8,6 +8,12 @@
 
 using namespace std;
 
+#ifndef FLOAT_TYPE
+#define FLOAT_TYPE float
+#endif
+typedef Pore_Model< FLOAT_TYPE > Pore_Model_Type;
+typedef Pore_Model_Type::Pore_Model_Parameters_Type Pore_Model_Parameters_Type;
+
 namespace opts
 {
     using namespace TCLAP;
@@ -22,8 +28,6 @@ namespace opts
 
 void real_main()
 {
-    typedef Pore_Model<> Pore_Model_Type;
-    typedef Pore_Model_Type::Pore_Model_Parameters_Type Pore_Model_Parameters_Type;
     Pore_Model_Type m;
     Pore_Model_Parameters_Type m_params;
     m.load_from_fast5(fast5::File(opts::file_name), opts::strand);

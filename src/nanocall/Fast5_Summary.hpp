@@ -11,17 +11,21 @@
 #endif
 
 #include "Pore_Model.hpp"
+#include "State_Transitions.hpp"
+#include "Event.hpp"
 #include "fast5.hpp"
 #include "alg.hpp"
 
-template < typename Float_Type = float >
+template < typename Float_Type >
 class Fast5_Summary
 {
 public:
     typedef Pore_Model< Float_Type > Pore_Model_Type;
+    typedef Pore_Model_Dict< Float_Type > Pore_Model_Dict_Type;
     typedef Pore_Model_Parameters< Float_Type > Pore_Model_Parameters_Type;
     typedef Event< Float_Type > Event_Type;
     typedef Event_Sequence< Float_Type > Event_Sequence_Type;
+    typedef State_Transition_Parameters< Float_Type > State_Transition_Parameters_Type;
 
     std::string file_name;
     std::string base_file_name;
@@ -32,8 +36,8 @@ public:
     std::array< unsigned, 4 > strand_bounds;
     std::array< Float_Type, 2 > time_length;
     unsigned num_ed_events;
-    float sampling_rate;
-    float abasic_level;
+    Float_Type sampling_rate;
+    Float_Type abasic_level;
     bool valid;
     bool scale_strands_together;
 
@@ -528,7 +532,5 @@ private:
         return true;
     } // filter_ed_event()
 }; // struct Fast5_Summary
-
-typedef Fast5_Summary<> Fast5_Summary_Type;
 
 #endif

@@ -12,6 +12,16 @@
 
 using namespace std;
 
+#ifndef FLOAT_TYPE
+#define FLOAT_TYPE float
+#endif
+typedef State_Transitions< FLOAT_TYPE > State_Transitions_Type;
+typedef Pore_Model< FLOAT_TYPE > Pore_Model_Type;
+typedef Event< FLOAT_TYPE > Event_Type;
+typedef Event_Sequence< FLOAT_TYPE > Event_Sequence_Type;
+typedef Forward_Backward< FLOAT_TYPE > Forward_Backward_Type;
+typedef Forward_Backward_Custom< FLOAT_TYPE > Forward_Backward_Custom_Type;
+
 namespace opts
 {
     using namespace TCLAP;
@@ -29,23 +39,23 @@ namespace opts
 
 void real_main()
 {
-    Pore_Model<> pm;
+    Pore_Model_Type pm;
     //Pore_Model_Parameters<> params;
-    State_Transitions<> st;
-    Event_Sequence<> ev;
+    State_Transitions_Type st;
+    Event_Sequence_Type ev;
     zstr::ifstream(opts::pm_file_name) >> pm;
     zstr::ifstream(opts::st_file_name) >> st;
     {
         zstr::ifstream ifs(opts::ev_file_name);
-        Event<> e;
+        Event_Type e;
         while (ifs >> e)
         {
             ev.push_back(e);
         }
     }
 
-    Forward_Backward<> fwbw;
-    Forward_Backward_Custom<> fwbw_custom;
+    Forward_Backward_Type fwbw;
+    Forward_Backward_Custom_Type fwbw_custom;
     if (not opts::custom_fwbw)
     {
         fwbw.fill(pm, st, ev);
@@ -56,12 +66,12 @@ void real_main()
     }
 
     // print all kmers with posterior >= .1 for the middle event
-    multiset< pair< float, unsigned > > s;
+    multiset< pair< FLOAT_TYPE, unsigned > > s;
     for (unsigned j = 0; j < pm.n_states; ++j)
     {
-        float v = exp(not opts::custom_fwbw
-                      ? fwbw.log_posterior(ev.size() / 2, j)
-                      : fwbw_custom.log_posterior(ev.size() / 2, j));
+        FLOAT_TYPE v = exp(not opts::custom_fwbw
+                           ? fwbw.log_posterior(ev.size() / 2, j)
+                           : fwbw_custom.log_posterior(ev.size() / 2, j));
         if (v >= .1)
         {
             s.insert(make_pair(v, j));
@@ -70,7 +80,7 @@ void real_main()
     while (not s.empty())
     {
         auto it = prev(s.end());
-        cout << Forward_Backward<>::Kmer_Type::to_string(it->second) << '\t' << it->first << endl;
+        cout << Forward_Backward_Type::Kmer_Type::to_string(it->second) << '\t' << it->first << endl;
         s.erase(it);
     }
 

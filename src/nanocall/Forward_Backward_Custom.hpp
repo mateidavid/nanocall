@@ -11,7 +11,7 @@
 #include "logsumset.hpp"
 #include "logger.hpp"
 
-template < typename Float_Type = float, unsigned Kmer_Size = 6 >
+template < typename Float_Type, unsigned Kmer_Size = 6 >
 class Forward_Backward_Custom
 {
 public:
@@ -50,7 +50,7 @@ public:
         clear();
         unsigned n_events = ev.size();
         _m.resize(n_states * n_events);
-        float log_n_states = std::log(static_cast< float >(n_states));
+        Float_Type log_n_states = std::log(static_cast< Float_Type >(n_states));
         LogSumSet_Type s1(false);
         LogSumSet_Type s2(false);
         //
@@ -159,7 +159,5 @@ public:
 private:
     std::vector< Matrix_Entry > _m;
 }; // class Forward_Backward_Custom
-
-typedef Forward_Backward_Custom<> Forward_Backward_Custom_Type;
 
 #endif

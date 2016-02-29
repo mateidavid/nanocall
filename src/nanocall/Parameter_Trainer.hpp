@@ -16,16 +16,19 @@
 #include "logdiff.hpp"
 #endif
 
-template < typename Float_Type = float, unsigned Kmer_Size = 6 >
+template < typename Float_Type, unsigned Kmer_Size = 6 >
 struct Parameter_Trainer
 {
     typedef Kmer< Kmer_Size > Kmer_Type;
     typedef Pore_Model< Float_Type, Kmer_Size > Pore_Model_Type;
+    typedef Pore_Model_Parameters< Float_Type > Pore_Model_Parameters_Type;
     typedef State_Transitions< Float_Type, Kmer_Size > State_Transitions_Type;
+    typedef State_Transition_Parameters< Float_Type > State_Transition_Parameters_Type;
     typedef Event< Float_Type > Event_Type;
     typedef Event_Sequence< Float_Type > Event_Sequence_Type;
     typedef Forward_Backward< Float_Type, Kmer_Size > Forward_Backward_Type;
     typedef logsum::logsumset< Float_Type > LogSumSet_Type;
+
     static const unsigned n_states = Pore_Model_Type::n_states;
 
     static void init()
@@ -85,7 +88,7 @@ struct Parameter_Trainer
         std::array< const State_Transitions_Type*, 2 > transitions_ptr_v;
         std::vector< Event_Sequence_Type > corrected_event_seq_v;
         std::vector< Forward_Backward_Type > fwbw_v;
-        float fit;
+        Float_Type fit;
     };
 
     /**
@@ -170,7 +173,7 @@ struct Parameter_Trainer
             ofs.open(std::string("transitions.") + k_sstr.str() + ".tab");
             for (unsigned j1 = 0; j1 < n_states; ++j1)
             {
-                std::map< unsigned, float > neighbour_m;
+                std::map< unsigned, Float_Type > neighbour_m;
                 for (const auto& p : data.transitions_ptr_v[st]->neighbours(j1).to_v)
                 {
                     neighbour_m[p.first] = p.second;
@@ -275,18 +278,26 @@ struct Parameter_Trainer
             }
         }
         // now compute matrices in normal space
-        std::array< std::array< Float_Type, 3 >, 3 > A =
-            {{ {{ std::exp(A_lss[0][0].val()), std::exp(A_lss[0][1].val()), std::exp(A_lss[0][2].val()) }},
-               {{ std::exp(A_lss[0][1].val()), std::exp(A_lss[1][1].val()), std::exp(A_lss[1][2].val()) }},
-               {{ std::exp(A_lss[0][2].val()), std::exp(A_lss[1][2].val()), std::exp(A_lss[2][2].val()) }} }};
-        std::array< Float_Type, 3 > B =
-            {{ std::exp(B_lss[0].val()), std::exp(B_lss[1].val()), std::exp(B_lss[2].val()) }};
+        std::array< std::array< double, 3 >, 3 > A =
+            {{ {{ std::exp((double)A_lss[0][0].val()),
+                  std::exp((double)A_lss[0][1].val()),
+                  std::exp((double)A_lss[0][2].val()) }},
+               {{ std::exp((double)A_lss[0][1].val()),
+                  std::exp((double)A_lss[1][1].val()),
+                  std::exp((double)A_lss[1][2].val()) }},
+               {{ std::exp((double)A_lss[0][2].val()),
+                  std::exp((double)A_lss[1][2].val()),
+                  std::exp((double)A_lss[2][2].val()) }} }};
+        std::array< double, 3 > B =
+            {{ std::exp((double)B_lss[0].val()),
+               std::exp((double)B_lss[1].val()),
+               std::exp((double)B_lss[2].val()) }};
 #ifndef NDEBUG
         auto A_copy = A;
         auto B_copy = B;
 #endif
         // compute scaling vector used for scaled partial pivoting
-        std::array< Float_Type, 3 > C;
+        std::array< double, 3 > C;
         for (unsigned i = 0; i < 3; ++i)
         {
             C[i] = alg::max_value_of(A[i]); // no need for abs(), as A>0
@@ -303,10 +314,10 @@ struct Parameter_Trainer
         for (unsigned i = 0; i < 3; ++i)
         {
             unsigned p = i;
-            float p_val = std::abs(A[i][i]) / C[p];
+            double p_val = std::abs(A[i][i]) / C[p];
             for (unsigned i2 = i + 1; i2 < 3; ++i2)
             {
-                float i2_val = std::abs(A[i2][i]) / C[i2];
+                double i2_val = std::abs(A[i2][i]) / C[i2];
                 if (i2_val > p_val)
                 {
                     p = i2;
@@ -332,7 +343,7 @@ struct Parameter_Trainer
             // eliminate variable i from the last i-1 equations
             for (p = i + 1; p < 3; ++p)
             {
-                float m = A[p][i] / A[i][i];
+                double m = A[p][i] / A[i][i];
                 A[p][i] = 0;
                 for (unsigned j = i + 1; j < 3; ++j)
                 {
@@ -360,9 +371,9 @@ struct Parameter_Trainer
         // sanity check
         for (unsigned i = 0; i < 3; ++i)
         {
-            float x = A_copy[i][0] * new_pm_params.shift
-                + A_copy[i][1] * new_pm_params.scale
-                + A_copy[i][2] * new_pm_params.drift;
+            double x = (A_copy[i][0] * new_pm_params.shift
+                        + A_copy[i][1] * new_pm_params.scale
+                        + A_copy[i][2] * new_pm_params.drift);
             ASSERT((x - B_copy[i])/std::max(x, B_copy[i]) < 1e-3);
         }
 #endif
@@ -371,9 +382,9 @@ struct Parameter_Trainer
         //
         LogSumSet_Type s(false);
 #if defined(USE_LOGDIFF)
-        float new_pm_params_log_abs_shift = std::log(std::abs(new_pm_params.shift));
-        float new_pm_params_log_scale = std::log(new_pm_params.scale);
-        float new_pm_params_log_abs_drift = std::log(std::abs(new_pm_params.drift));
+        Float_Type new_pm_params_log_abs_shift = std::log(std::abs(new_pm_params.shift));
+        Float_Type new_pm_params_log_scale = std::log(new_pm_params.scale);
+        Float_Type new_pm_params_log_abs_drift = std::log(std::abs(new_pm_params.drift));
 #if defined(CHECK_LOGDIFF)
         LogSumSet_Type s2(false);
 #endif
@@ -389,22 +400,22 @@ struct Parameter_Trainer
             {
                 for (unsigned j = 0; j < Pore_Model_Type::n_states; ++j)
                 {
-                    float x = fwbw.log_posterior(i, j) - 2 * pm.state(j).log_level_stdv;
+                    Float_Type x = fwbw.log_posterior(i, j) - 2 * pm.state(j).log_level_stdv;
 #if !defined(USE_LOGDIFF) || defined(CHECK_LOGDIFF)
-                    float y =
+                    Float_Type y =
                         std::log(std::abs(events[i].mean
                                           - new_pm_params.shift
                                           - new_pm_params.scale * pm.state(j).level_mean
                                           - new_pm_params.drift * events[i].start));
 #endif
 #if defined(USE_LOGDIFF)
-                    float a = events[i].log_mean;
-                    float b = new_pm_params_log_scale + pm.state(j).log_level_mean;
-                    float& shift_contrib = (new_pm_params.shift > 0? b : a);
+                    Float_Type a = events[i].log_mean;
+                    Float_Type b = new_pm_params_log_scale + pm.state(j).log_level_mean;
+                    Float_Type& shift_contrib = (new_pm_params.shift > 0? b : a);
                     shift_contrib = logsum::p7_FLogsum(shift_contrib, new_pm_params_log_abs_shift);
-                    float& drift_contrib = (new_pm_params.drift > 0? b : a);
+                    Float_Type& drift_contrib = (new_pm_params.drift > 0? b : a);
                     drift_contrib = logsum::p7_FLogsum(drift_contrib, new_pm_params_log_abs_drift + events[i].log_start);
-                    float y2 = logdiff::LogDiff(a, b);
+                    Float_Type y2 = logdiff::LogDiff(a, b);
                     s.add(x + 2 * y2);
 #if defined(CHECK_LOGDIFF)
                     s2.add(x + 2 * y);
@@ -446,8 +457,8 @@ struct Parameter_Trainer
             LogSumSet_Type s_p_stay_num(false);
             LogSumSet_Type s_p_skip_num(false);
             LogSumSet_Type s_denom(false);
-            float log_p_stay = std::log(data.st_params_ptr_v[st]->p_stay);
-            float log_p_step_4 = std::log(1 - data.st_params_ptr_v[st]->p_stay - data.st_params_ptr_v[st]->p_skip) - std::log(4.0);
+            Float_Type log_p_stay = std::log(data.st_params_ptr_v[st]->p_stay);
+            Float_Type log_p_step_4 = std::log(1.0 - data.st_params_ptr_v[st]->p_stay - data.st_params_ptr_v[st]->p_skip) - std::log(4.0);
             for (unsigned k = 0; k < n_event_seqs; ++k)
             {
                 if (data.event_seq_ptr_v[k].second != st) continue;
@@ -458,8 +469,8 @@ struct Parameter_Trainer
                 //
                 // P[S_i = j1, S_{i+1} = j2]
                 //
-                auto log_joint_prob = [&] (unsigned i, unsigned j1, unsigned j2, float log_p_trans) {
-                    float p = fwbw.cell(i, j1).alpha
+                auto log_joint_prob = [&] (unsigned i, unsigned j1, unsigned j2, Float_Type log_p_trans) {
+                    Float_Type p = fwbw.cell(i, j1).alpha
                         + log_p_trans
                         + scaled_pm.log_pr_emission(j2, corrected_events[i + 1])
                         + fwbw.cell(i + 1, j2).beta
@@ -478,10 +489,10 @@ struct Parameter_Trainer
                     for (auto j1 : st_train_kmers())
                     {
                         // Pr[ S_i = j1 ]
-                        float log_p_j1 = fwbw.log_posterior(i, j1);
+                        Float_Type log_p_j1 = fwbw.log_posterior(i, j1);
                         s_denom.add(log_p_j1);
                         // Pr[ S_i = j1, S_{i+1} = j1 ]
-                        float log_p_j1_j1 = log_joint_prob(i, j1, j1, log_p_stay);
+                        Float_Type log_p_j1_j1 = log_joint_prob(i, j1, j1, log_p_stay);
                         if (log_p_j1_j1 > log_p_j1)
                         {
                             if (log_p_j1_j1 > log_p_j1 + std::max(std::abs(log_p_j1), 1.0f) * 1.0e-3)
@@ -493,7 +504,7 @@ struct Parameter_Trainer
                         }
                         s_p_stay_num.add(log_p_j1_j1);
                         // Pr[ S_i = j1, dist(j1,S_{i+1}) > 1 ]
-                        float log_p_j1_d01;
+                        Float_Type log_p_j1_d01;
                         {
                             LogSumSet_Type s2(false);
                             s2.add(log_p_j1_j1);
@@ -513,7 +524,7 @@ struct Parameter_Trainer
                             }
                             log_p_j1_d01 = log_p_j1;
                         }
-                        float p_j1_d2 = std::exp(log_p_j1) - std::exp(log_p_j1_d01);
+                        Float_Type p_j1_d2 = std::exp(log_p_j1) - std::exp(log_p_j1_d01);
                         s_p_skip_num.add(std::log(p_j1_d2));
                     }
                 }
@@ -926,7 +937,5 @@ struct Parameter_Trainer
     } // train_one_round
 
 }; // class Parameter_Trainer
-
-typedef Parameter_Trainer<> Parameter_Trainer_Type;
 
 #endif

@@ -8,6 +8,11 @@
 
 using namespace std;
 
+#ifndef FLOAT_TYPE
+#define FLOAT_TYPE float
+#endif
+typedef State_Transitions< FLOAT_TYPE > State_Transitions_Type;
+
 namespace opts
 {
     using namespace TCLAP;
@@ -24,7 +29,7 @@ namespace opts
 
 void real_main()
 {
-    State_Transitions<> st;
+    State_Transitions_Type st;
     if (opts::fast)
     {
         st.compute_transitions_fast(opts::p_skip, opts::p_stay);
