@@ -48,21 +48,25 @@ namespace opts
     ValueArg< unsigned > min_read_len("", "min-len", "Minimum read length.", false, 10, "int", cmd_parser);
     ValueArg< unsigned > fasta_line_width("", "fasta-line-width", "Maximum fasta line width.", false, 80, "int", cmd_parser);
     //
-    ValueArg< float > scale_select_model_threshold("", "scale-select-model-threshold", "Select best model per strand during rescaling if log score better by threshold.", false, 20.0, "float", cmd_parser);
-    SwitchArg scale_strands_together("", "scale-strands-together", "Use same scaling parameters for both strands.", cmd_parser);
-    ValueArg< float > scale_min_fit_progress("", "scale-min-fit-progress", "Minimum scaling fit progress.", false, 1.0, "float", cmd_parser);
-    ValueArg< unsigned > scale_max_rounds("", "scale-max-rounds", "Maximum scaling rounds.", false, 10, "int", cmd_parser);
-    ValueArg< unsigned > scale_num_events("", "scale-num-events", "Number of events used for model scaling.", false, 200, "int", cmd_parser);
-    SwitchArg train_only("", "train-only", "Stop after training.", cmd_parser);
-    SwitchArg train_transitions("", "no-train-transitions", "Do not train state transitions.", cmd_parser, true);
-    SwitchArg train_scaling("", "no-train-scaling", "Do not train pore model scaling.", cmd_parser, true);
-    SwitchArg accurate("", "accurate", "Compute model scalings more accurately.", cmd_parser);
-    ValueArg< float > pr_cutoff("", "pr-cutoff", "Minimum value for transition probabilities; smaller values are set to zero.", false, .001, "float", cmd_parser);
+    ValueArg< float > scaling_select_threshold("", "scale-select-threshold", "Select best model per strand during scaling if log score better by threshold.", false, 20.0, "float", cmd_parser);
+    ValueArg< float > scaling_min_progress("", "scale-min-progress", "Minimum scaling fit progress.", false, 1.0, "float", cmd_parser);
+    ValueArg< unsigned > scaling_max_rounds("", "scale-max-rounds", "Maximum scaling rounds.", false, 10, "int", cmd_parser);
+    ValueArg< unsigned > scaling_num_events("", "scale-num-events", "Number of events used for model scaling.", false, 200, "int", cmd_parser);
+    //
+    SwitchArg single_strand_scaling("", "single-strand-scaling", "Train scaling parameters per strand.", cmd_parser);
+    SwitchArg double_strand_scaling("", "double-strand-scaling", "Train scaling parameters per read.", cmd_parser);
+    SwitchArg no_train_transitions("", "no-train-transitions", "Do not train state transitions.", cmd_parser);
+    SwitchArg no_train_scaling("", "no-train-scaling", "Do not train pore model scaling.", cmd_parser);
+    SwitchArg only_train("", "only-train", "Stop after training.", cmd_parser);
+    SwitchArg train("", "train", "Enable training.", cmd_parser);
+    SwitchArg no_train("", "no-train", "Disable all training.", cmd_parser);
+    //
     ValueArg< float > pr_skip("", "pr-skip", "Transition probability of skipping at least 1 state.", false, .28, "float", cmd_parser);
     ValueArg< float > pr_stay("", "pr-stay", "Transition probability of staying in the same state.", false, .09, "float", cmd_parser);
     ValueArg< string > trans_fn("s", "trans", "Custom initial state transitions.", false, "", "file", cmd_parser);
     ValueArg< string > model_fofn("", "model-fofn", "File of pore models.", false, "", "file", cmd_parser);
     MultiArg< string > model_fn("m", "model", "Custom pore model.", false, "file", cmd_parser);
+    //
     ValueArg< string > output_fn("o", "output", "Output.", false, "", "file", cmd_parser);
     ValueArg< unsigned > num_threads("t", "threads", "Number of parallel threads.", false, 1, "int", cmd_parser);
     UnlabeledMultiArg< string > input_fn("inputs", "Inputs. Accepts: directories, fast5 files, or files of fast5 file names (use \"-\" to read fofn from stdin).", true, "path", cmd_parser);
@@ -149,9 +153,9 @@ void init_transitions(State_Transitions_Type& transitions)
     }
     else
     {
-        transitions.compute_transitions(opts::pr_skip, opts::pr_stay, opts::pr_cutoff);
-        LOG(info) << "initialized state transitions with parameters p_skip=[" << opts::pr_skip
-                  << "], pr_stay=[" << opts::pr_stay << "], pr_cutoff=[" << opts::pr_cutoff << "]" << endl;
+        transitions.compute_transitions_fast(opts::pr_skip, opts::pr_stay);
+        LOG(info) << "init_state_transitions p_skip=[" << opts::pr_skip
+                  << "], pr_stay=[" << opts::pr_stay << "]" << endl;
     }
 } // init_transitions
 
@@ -229,15 +233,15 @@ void init_reads(const Pore_Model_Dict_Type& models,
 {
     for (const auto& f : files)
     {
-        Fast5_Summary_Type s(f, models, opts::scale_strands_together);
+        Fast5_Summary_Type s(f, models, opts::double_strand_scaling);
         LOG(info) << "summary: " << s << endl;
         reads.emplace_back(move(s));
     }
 } // init_reads
 
-void rescale_reads(const Pore_Model_Dict_Type& models,
-                   const State_Transitions_Type& default_transitions,
-                   deque< Fast5_Summary_Type >& reads)
+void train_reads(const Pore_Model_Dict_Type& models,
+                 const State_Transitions_Type& default_transitions,
+                 deque< Fast5_Summary_Type >& reads)
 {
     Parameter_Trainer_Type::init();
     unsigned crt_idx = 0;
@@ -292,7 +296,7 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                 // if not enough events, ignore strand
                 if (read_summary.events(st).size() < opts::min_read_len) continue;
                 // create 2 event sequences on which to train
-                unsigned num_train_events = min((size_t)opts::scale_num_events.get(), read_summary.events(st).size());
+                unsigned num_train_events = min((size_t)opts::scaling_num_events.get(), read_summary.events(st).size());
                 train_event_seqs[st].emplace_back(
                     read_summary.events(st).begin(), read_summary.events(st).begin() + num_train_events / 2);
                 train_event_seqs[st].emplace_back(
@@ -339,7 +343,7 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                                 default_transitions,
                                 old_pm_params, old_st_params,
                                 crt_pm_params, crt_st_params, crt_fit, done,
-                                opts::train_scaling, opts::train_transitions);
+                                not opts::no_train_scaling, not opts::no_train_transitions);
 
                             LOG(debug)
                                 << "scaling_round read [" << read_summary.read_id
@@ -379,8 +383,8 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
 
                             ++round;
                             // stop condition
-                            if (round >= 2u * opts::scale_max_rounds
-                                or (round > 1 and crt_fit < old_fit + opts::scale_min_fit_progress))
+                            if (round >= 2u * opts::scaling_max_rounds
+                                or (round > 1 and crt_fit < old_fit + opts::scaling_min_progress))
                             {
                                 break;
                             }
@@ -396,7 +400,7 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                             << "] rounds [" << round << "]" << endl;
                     } // for m_name[1]
                 } // for m_name[0]
-                if (opts::scale_select_model_threshold.get() < INFINITY)
+                if (opts::scaling_select_threshold.get() < INFINITY)
                 {
                     auto it_max = alg::max_of(
                         model_fit,
@@ -406,7 +410,7 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                             model_fit,
                             [&] (const decltype(model_fit)::value_type& p) {
                                 return &p == &*it_max
-                                    or p.second + opts::scale_select_model_threshold.get() < it_max->second;
+                                    or p.second + opts::scaling_select_threshold.get() < it_max->second;
                             }))
                     {
                         const auto& m_name_0 = it_max->first[0];
@@ -455,7 +459,7 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                                 default_transitions,
                                 old_pm_params, old_st_params,
                                 crt_pm_params, crt_st_params, crt_fit, done,
-                                opts::train_scaling, opts::train_transitions);
+                                not opts::no_train_scaling, not opts::no_train_transitions);
 
                             LOG(debug)
                                 << "scaling_round read [" << read_summary.read_id
@@ -495,8 +499,8 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
 
                             ++round;
                             // stop condition
-                            if (round >= opts::scale_max_rounds
-                                or (round > 1 and crt_fit < old_fit + opts::scale_min_fit_progress))
+                            if (round >= opts::scaling_max_rounds
+                                or (round > 1 and crt_fit < old_fit + opts::scaling_min_progress))
                             {
                                 break;
                             }
@@ -511,7 +515,7 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                             << "] fit [" << crt_fit
                             << "] rounds [" << round << "]" << endl;
                     } // for m_name
-                    if (opts::scale_select_model_threshold.get() < INFINITY)
+                    if (opts::scaling_select_threshold.get() < INFINITY)
                     {
                         auto it_max = alg::max_of(
                             model_fit,
@@ -520,7 +524,7 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                                 model_fit,
                                 [&] (const decltype(model_fit)::value_type& p) {
                                     return &p == &*it_max
-                                        or p.second + opts::scale_select_model_threshold.get() < it_max->second;
+                                        or p.second + opts::scaling_select_threshold.get() < it_max->second;
                                 }))
                         {
                             read_summary.preferred_model[st][st] = it_max->first;
@@ -531,7 +535,7 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
                         }
                     }
                 } // for st
-            } // if not opts::scale_strands_together
+            } // if not scale_strands_together
             read_summary.drop_events();
         }, // process_item
         // progress_report
@@ -539,7 +543,7 @@ void rescale_reads(const Pore_Model_Dict_Type& models,
             clog << "Processed " << setw(6) << right << items << " reads in "
                  << setw(6) << right << seconds << " seconds\r";
         }); // pfor
-} // rescale_reads
+} // train_reads
 
 void write_fasta(ostream& os, const string& name, const string& seq)
 {
@@ -711,7 +715,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                     write_fasta(oss, tmp.str(), *base_seq_ptr[st]);
                 }
             }
-            else // not opts::scale_strands_together
+            else // not scale_strands_together
             {
                 for (unsigned st = 0; st < 2; ++st)
                 {
@@ -789,12 +793,12 @@ int real_main()
     init_transitions(default_transitions);
     init_files(files);
     init_reads(models, files, reads);
-    if (opts::accurate)
+    if (opts::train)
     {
         // do some rescaling
-        rescale_reads(models, default_transitions, reads);
+        train_reads(models, default_transitions, reads);
     }
-    if (not opts::train_only)
+    if (not opts::only_train)
     {
         // basecall reads
         basecall_reads(models, default_transitions, reads);
@@ -833,22 +837,70 @@ int main(int argc, char * argv[])
     State_Transition_Parameters_Type::default_p_skip() = opts::pr_skip;
     Fast5_Summary_Type::min_read_len() = opts::min_read_len;
     Fast5_Summary_Type::max_read_len() = opts::max_read_len;
-    if (opts::scale_select_model_threshold.get() < 0.0)
+    //
+    // set training option
+    //
+    if (opts::train and opts::no_train)
     {
         LOG(error)
-            << "invalid scale_select_model_threshold: " << opts::scale_select_model_threshold.get() << endl;
+            << "either --train or --no-train may be used, but not both" << endl;
         return EXIT_FAILURE;
     }
-    LOG(info) << "options training=" << opts::accurate.get() << endl;
-    if (opts::accurate)
+    else if (not opts::train and not opts::no_train)
     {
-        LOG(info) << "options train_scaling=" << opts::train_scaling.get()
-                  << " train_transitions=" << opts::train_transitions.get()
-                  << " scale_strands_together=" << opts::scale_strands_together.get()
-                  << " scale_num_events=" << opts::scale_num_events.get()
-                  << " scale_max_rounds=" << opts::scale_max_rounds.get()
-                  << " scale_min_fit_progress=" << opts::scale_min_fit_progress.get()
-                  << " scale_select_model_threshold=" << opts::scale_select_model_threshold.get() << endl;
+        // by default, enable training
+        opts::train.set(true);
+    }
+    ASSERT(opts::train != opts::no_train);
+    //
+    // set single/double strand scaling option
+    //
+    if (opts::train and not opts::no_train_scaling)
+    {
+        if (opts::single_strand_scaling and opts::double_strand_scaling)
+        {
+            LOG(error)
+                << "either --single-strand-scaling or --double-strand-scaling may be used, but not both" << endl;
+            return EXIT_FAILURE;
+        }
+        else if (not opts::single_strand_scaling and not opts::double_strand_scaling)
+        {
+            // by default, do double strand scaling
+            opts::double_strand_scaling.set(true);
+        }
+    }
+    //
+    // check other options
+    //
+    if (opts::scaling_select_threshold.get() < 0.0)
+    {
+        LOG(error)
+            << "invalid scaling_select_threshold: " << opts::scaling_select_threshold.get() << endl;
+        return EXIT_FAILURE;
+    }
+    if (opts::scaling_min_progress < 0.0)
+    {
+        LOG(error)
+            << "invalid scaling_min_progress: " << opts::scaling_min_progress.get() << endl;
+        return EXIT_FAILURE;
+    }
+    //
+    // print training options
+    //
+    LOG(info) << "train=" << opts::train.get() << endl;
+    if (opts::train)
+    {
+        LOG(info) << "only_train=" << opts::only_train.get() << endl;
+        LOG(info) << "train_scaling=" << not opts::no_train_scaling.get() << endl;
+        LOG(info) << "train_transitions=" << not opts::no_train_transitions.get() << endl;
+        if (not opts::no_train_scaling)
+        {
+            LOG(info) << "double_strands_scaling=" << opts::double_strand_scaling.get() << endl;
+            LOG(info) << "scaling_num_events=" << opts::scaling_num_events.get() << endl;
+            LOG(info) << "scaling_max_rounds=" << opts::scaling_max_rounds.get() << endl;
+            LOG(info) << "scaling_min_progress=" << opts::scaling_min_progress.get() << endl;
+            LOG(info) << "scaling_select_threshold=" << opts::scaling_select_threshold.get() << endl;
+        }
     }
     return real_main();
 }
