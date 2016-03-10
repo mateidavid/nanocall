@@ -342,15 +342,17 @@ public:
            << '\t' << strand_bounds[2] << '\t' << strand_bounds[3];
         for (unsigned st = 0; st < 2; ++st)
         {
-            os << '\t' << preferred_model[st][st] << '\t';
+            os << '\t';
             if (not preferred_model[st][st].empty())
             {
+                os << preferred_model[st][st] << '\t';
                 pm_params_m.at(preferred_model[st]).write_tsv(os);
                 os << '\t';
                 st_params_m.at(preferred_model[st])[st].write_tsv(os);
             }
             else
             {
+                os << ".\t";
                 Pore_Model_Parameters_Type().write_tsv(os);
                 os << '\t';
                 State_Transition_Parameters_Type().write_tsv(os);
