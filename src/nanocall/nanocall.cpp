@@ -61,8 +61,8 @@ namespace opts
     SwitchArg train("", "train", "Enable training.", cmd_parser);
     SwitchArg no_train("", "no-train", "Disable all training.", cmd_parser);
     //
-    ValueArg< float > pr_skip("", "pr-skip", "Transition probability of skipping at least 1 state.", false, .28, "float", cmd_parser);
-    ValueArg< float > pr_stay("", "pr-stay", "Transition probability of staying in the same state.", false, .09, "float", cmd_parser);
+    ValueArg< float > pr_skip("", "pr-skip", "Transition probability of skipping at least 1 state.", false, .3, "float", cmd_parser);
+    ValueArg< float > pr_stay("", "pr-stay", "Transition probability of staying in the same state.", false, .1, "float", cmd_parser);
     ValueArg< string > trans_fn("s", "trans", "Custom initial state transitions.", false, "", "file", cmd_parser);
     ValueArg< string > model_fofn("", "model-fofn", "File of pore models.", false, "", "file", cmd_parser);
     MultiArg< string > model_fn("m", "model", "Custom pore model.", false, "file", cmd_parser);
