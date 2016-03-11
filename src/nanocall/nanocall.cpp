@@ -827,6 +827,7 @@ int main(int argc, char * argv[])
     LOG(info) << "program: " << opts::cmd_parser.getProgramName() << endl;
     LOG(info) << "version: " << opts::cmd_parser.getVersion() << endl;
     LOG(info) << "args: " << opts::cmd_parser.getOrigArgv() << endl;
+    LOG(info) << "num_threads=" << opts::num_threads.get() << endl;
 #ifndef H5_HAVE_THREADSAFE
     if (opts::num_threads > 1)
     {
