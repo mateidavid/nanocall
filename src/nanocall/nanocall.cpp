@@ -48,10 +48,10 @@ namespace opts
     ValueArg< unsigned > min_read_len("", "min-len", "Minimum read length.", false, 10, "int", cmd_parser);
     ValueArg< unsigned > fasta_line_width("", "fasta-line-width", "Maximum fasta line width.", false, 80, "int", cmd_parser);
     //
-    ValueArg< float > scaling_select_threshold("", "scale-select-threshold", "Select best model per strand during scaling if log score better by threshold.", false, 20.0, "float", cmd_parser);
-    ValueArg< float > scaling_min_progress("", "scale-min-progress", "Minimum scaling fit progress.", false, 1.0, "float", cmd_parser);
-    ValueArg< unsigned > scaling_max_rounds("", "scale-max-rounds", "Maximum scaling rounds.", false, 10, "int", cmd_parser);
-    ValueArg< unsigned > scaling_num_events("", "scale-num-events", "Number of events used for model scaling.", false, 200, "int", cmd_parser);
+    ValueArg< float > scaling_select_threshold("", "scaling-select-threshold", "Select best model per strand during scaling if log score better by threshold.", false, 20.0, "float", cmd_parser);
+    ValueArg< float > scaling_min_progress("", "scaling-min-progress", "Minimum scaling fit progress.", false, 1.0, "float", cmd_parser);
+    ValueArg< unsigned > scaling_max_rounds("", "scaling-max-rounds", "Maximum scaling rounds.", false, 10, "int", cmd_parser);
+    ValueArg< unsigned > scaling_num_events("", "scaling-num-events", "Number of events used for model scaling.", false, 200, "int", cmd_parser);
     //
     SwitchArg single_strand_scaling("", "single-strand-scaling", "Train scaling parameters per strand.", cmd_parser);
     SwitchArg double_strand_scaling("", "double-strand-scaling", "Train scaling parameters per read.", cmd_parser);
