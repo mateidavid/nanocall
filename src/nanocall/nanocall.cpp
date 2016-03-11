@@ -154,7 +154,7 @@ void init_transitions(State_Transitions_Type& transitions)
     else
     {
         transitions.compute_transitions_fast(opts::pr_skip, opts::pr_stay);
-        LOG(info) << "init_state_transitions p_skip=[" << opts::pr_skip
+        LOG(info) << "init_state_transitions pr_skip=[" << opts::pr_skip
                   << "], pr_stay=[" << opts::pr_stay << "]" << endl;
     }
 } // init_transitions
