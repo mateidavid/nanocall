@@ -42,6 +42,7 @@ namespace opts
     string description = "Call bases in Oxford Nanopore reads.";
     CmdLine cmd_parser(description, ' ', package_version);
     //
+    ValueArg< unsigned > chunk_size("", "chunk-size", "Thread chunk size.", false, 1, "int", cmd_parser);
     MultiArg< string > log_level("", "log", "Log level.", false, "string", cmd_parser);
     ValueArg< string > stats_fn("", "stats", "Stats.", false, "", "file", cmd_parser);
     ValueArg< unsigned > max_read_len("", "max-len", "Maximum read length.", false, 50000, "int", cmd_parser);
@@ -247,7 +248,7 @@ void train_reads(const Pore_Model_Dict_Type& models,
     unsigned crt_idx = 0;
     pfor::pfor< unsigned >(
         opts::num_threads,
-        10,
+        opts::chunk_size,
         // get_item
         [&] (unsigned& i) {
             if (crt_idx >= reads.size()) return false;
@@ -573,7 +574,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
     unsigned crt_idx = 0;
     pfor::pfor< unsigned, ostringstream >(
         opts::num_threads,
-        10,
+        opts::chunk_size,
         // get_item
         [&] (unsigned& i) {
             if (crt_idx >= reads.size()) return false;
