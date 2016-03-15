@@ -24,22 +24,11 @@
 
 using namespace std;
 
-// get process cpu time
-#ifdef HAVE_CLOCK_GETTIME
-double get_cpu_ns_time()
+long get_cpu_time_ms()
 {
-    struct timespec t;
-    clock_gettime(CLOCK_PROCESS_CPUTIME_ID, &t);
-    return 1.0e9 * t.tv_sec + t.tv_nsec;
+    auto t = clock();
+    return (t * 1000) / CLOCKS_PER_SEC;
 }
-#else
-double get_cpu_ns_time()
-{
-    clock_t t;
-    t = clock();
-    return (1.0e9 / CLOCKS_PER_SEC) * t;
-}
-#endif
 
 #ifndef FLOAT_TYPE
 #define FLOAT_TYPE float
@@ -263,7 +252,7 @@ void train_reads(const Pore_Model_Dict_Type& models,
                  const State_Transitions_Type& default_transitions,
                  deque< Fast5_Summary_Type >& reads)
 {
-    auto time_start = get_cpu_ns_time();
+    auto time_start_ms = get_cpu_time_ms();
     Parameter_Trainer_Type::init();
     unsigned crt_idx = 0;
     pfor::pfor< unsigned >(
@@ -564,8 +553,8 @@ void train_reads(const Pore_Model_Dict_Type& models,
             clog << "Processed " << setw(6) << right << items << " reads in "
                  << setw(6) << right << seconds << " seconds\r";
         }); // pfor
-    auto time_end = get_cpu_ns_time();
-    LOG(info) << "training_cpu_time=" << std::fixed << std::setprecision(2) << (time_end - time_start)/1e9 << endl;
+    auto time_end_ms = get_cpu_time_ms();
+    LOG(info) << "training user_cpu_secs=" << (time_end_ms - time_start_ms)/1000 << endl;
 } // train_reads
 
 void write_fasta(ostream& os, const string& name, const string& seq)
@@ -581,7 +570,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                     const State_Transitions_Type& default_transitions,
                     deque< Fast5_Summary_Type >& reads)
 {
-    auto time_start = get_cpu_ns_time();
+    auto time_start_ms = get_cpu_time_ms();
     strict_fstream::ofstream ofs;
     ostream* os_p = nullptr;
     if (not opts::output_fn.get().empty())
@@ -804,8 +793,8 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
             clog << "Processed " << setw(6) << right << items << " reads in "
                  << setw(6) << right << seconds << " seconds\r";
         }); // pfor
-    auto time_end = get_cpu_ns_time();
-    LOG(info) << "basecalling_cpu_time=" << std::fixed << std::setprecision(2) << (time_end - time_start)/1e9 << endl;
+    auto time_end_ms = get_cpu_time_ms();
+    LOG(info) << "basecalling user_cpu_secs=" << (time_end_ms - time_start_ms)/1000 << endl;
 } // basecall_reads
 
 int real_main()

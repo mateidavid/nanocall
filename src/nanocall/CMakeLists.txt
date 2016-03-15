@@ -8,7 +8,6 @@ target_link_libraries(nanocall
     version
     libhdf5
     ${CMAKE_DL_LIBS}
-    ${CMAKE_CLOCK_GETTIME_LIB}
     ${ZLIB_LIBRARIES}
     )
 install(TARGETS nanocall RUNTIME DESTINATION bin)
