@@ -60,6 +60,19 @@ set(CMAKE_INSTALL_RPATH_USE_LINK_PATH true)
 set(CMAKE_BUILD_WITH_INSTALL_RPATH true)
 set(CMAKE_LIBRARY_PATH $ENV{LD_LIBRARY_PATH})
 
+# check if clock_gettime is available
+# ref: http://stackoverflow.com/a/32548086
+include(CheckFunctionExists)
+include(CheckLibraryExists)
+set(CMAKE_CLOCK_GETTIME_LIB "")
+check_library_exists(rt clock_gettime "time.h" HAVE_CLOCK_GETTIME)
+if (HAVE_CLOCK_GETTIME)
+    set(CMAKE_CLOCK_GETTIME_LIB "-lrt")
+else()
+    # might also be in libc
+    check_library_exists(c clock_gettime "" HAVE_CLOCK_GETTIME)
+endif()
+
 # find zlib
 # => ZLIB_INCLUDE_DIRS, ZLIB_LIBRARIES
 find_package(ZLIB REQUIRED)
@@ -141,8 +154,12 @@ get_directory_property(include_directories INCLUDE_DIRECTORIES)
 message(STATUS "INCLUDE_DIRECTORIES='${include_directories}'")
 
 ### general compile flags
-#
 set(EXTRA_FLAGS "-std=c++11 -pthread -Wall -Wextra -pedantic")
+
+# clock_gettime
+if (HAVE_CLOCK_GETTIME)
+    set(EXTRA_FLAGS "${EXTRA_FLAGS} -DHAVE_CLOCK_GETTIME")
+endif()
 
 # compiler-specific flags
 if ("${CMAKE_CXX_COMPILER_ID}" STREQUAL "GNU")
@@ -156,7 +173,6 @@ set(CMAKE_CXX_FLAGS "$ENV{CXXFLAGS} ${EXTRA_FLAGS}")
 message(STATUS "CMAKE_CXX_FLAGS='${CMAKE_CXX_FLAGS}'")
 
 ### build-specific compile flags
-
 set(CMAKE_CXX_FLAGS_DEBUG "-O0 -g3 -ggdb -fno-inline -fno-eliminate-unused-debug-types")
 set(CMAKE_CXX_FLAGS_TEST "-O3 -g3 -fno-eliminate-unused-debug-types")
 set(CMAKE_CXX_FLAGS_TEST_O2 "-O2 -g3 -fno-eliminate-unused-debug-types")
