@@ -5,7 +5,7 @@ RUN apt-get update && apt-get install -y build-essential cmake git libhdf5-dev
 
 #RUN mkdir /src && \
 #     cd /src && \
-#     git clone --recursive https://github.com/jts/nanocall.git
+#     git clone --recursive https://github.com/mateidavid/nanocall.git
 ADD src /src/nanocall/src
 ADD VERSION /src/nanocall/
 

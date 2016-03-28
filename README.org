@@ -13,7 +13,7 @@ Example build:
 
 #+BEGIN_EXAMPLE
 mkdir /some/source/dir && cd /some/source/dir
-git clone --recursive https://github.com/jts/nanocall.git
+git clone --recursive https://github.com/mateidavid/nanocall.git
 cd nanocall
 mkdir build && cd build
 cmake ../src [-DCMAKE_INSTALL_PREFIX=/some/install/dir] [-DBUILD_HDF5=1] [-DHDF5_ROOT=/path/to/hdf5]
@@ -37,7 +37,7 @@ Example build:
 
 #+BEGIN_EXAMPLE
 mkdir /some/source/dir && cd /some/source/dir
-git clone --recursive https://github.com/jts/nanocall.git
+git clone --recursive https://github.com/mateidavid/nanocall.git
 docker build -t nanocall /some/source/dir
 docker run --rm nanocall
 #+END_EXAMPLE
