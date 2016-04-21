@@ -225,11 +225,14 @@ public:
     // load model from input stream
     friend std::istream& operator >> (std::istream& is, Pore_Model& pm)
     {
+        pm._state.clear();
+        pm._state.reserve(n_states);
         for (unsigned i = 0; i < pm.n_states; ++i)
         {
             std::string s;
             is >> s;
             assert(Kmer_Type::to_int(s) == i);
+            pm._state.emplace_back();
             is >> pm.state(i).level_mean
                >> pm.state(i).level_stdv
                >> pm.state(i).sd_mean
