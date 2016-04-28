@@ -53,8 +53,8 @@ struct Pore_Model_Parameters
 
     void load_from_fast5(const fast5::File& f, bool strand)
     {
-        assert(f.have_model(strand));
-        auto m_p = f.get_model_parameters(strand);
+        assert(f.have_basecall_model(strand));
+        auto m_p = f.get_basecall_model_params(strand);
         scale = m_p.scale;
         shift = m_p.shift;
         drift = m_p.drift;
@@ -180,8 +180,8 @@ public:
     // load model from fast5 file
     void load_from_fast5(const fast5::File& f, bool strand)
     {
-        assert(f.have_model(strand));
-        auto m = f.get_model(strand);
+        assert(f.have_basecall_model(strand));
+        auto m = f.get_basecall_model(strand);
         assert(m.size() == n_states);
         _state.clear();
         _state.reserve(n_states);

@@ -137,7 +137,7 @@ public:
                     break;
                 }
                 // get ed event params
-                auto ed_params = f.get_eventdetection_event_parameters(); // can throw
+                auto ed_params = f.get_eventdetection_event_params(); // can throw
                 if (not ed_params.read_id.empty())
                 {
                     read_id = ed_params.read_id;
