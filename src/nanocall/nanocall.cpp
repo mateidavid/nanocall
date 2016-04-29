@@ -50,6 +50,7 @@ namespace opts
     string description = "Call bases in Oxford Nanopore reads.";
     CmdLine cmd_parser(description, ' ', package_version);
     //
+    ValueArg< string > ed_group("", "ed-group", "EventDetection group to use.", false, "", "e.g. '000'", cmd_parser);
     ValueArg< unsigned > chunk_size("", "chunk-size", "Thread chunk size.", false, 1, "int", cmd_parser);
     MultiArg< string > log_level("", "log", "Log level.", false, "string", cmd_parser);
     ValueArg< string > stats_fn("", "stats", "Stats.", false, "", "file", cmd_parser);
@@ -853,6 +854,7 @@ int main(int argc, char * argv[])
     State_Transition_Parameters_Type::default_p_skip() = opts::pr_skip;
     Fast5_Summary_Type::min_read_len() = opts::min_read_len;
     Fast5_Summary_Type::max_read_len() = opts::max_read_len;
+    Fast5_Summary_Type::eventdetection_group() = opts::ed_group;
     //
     // set training option
     //

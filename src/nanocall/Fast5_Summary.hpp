@@ -82,6 +82,12 @@ public:
         return _max_read_len;
     }
 
+    static std::string& eventdetection_group()
+    {
+        static std::string _eventdetection_group = "000";
+        return _eventdetection_group;
+    }
+
     Fast5_Summary() : valid(false) {}
     Fast5_Summary(const std::string fn, const Pore_Model_Dict_Type& models, bool sst)
         : valid(false) { summarize(fn, models, sst); }
@@ -117,7 +123,9 @@ public:
                     break;
                 }
                 // get ed events
-                if (not f.have_eventdetection_events())
+                if (not eventdetection_group().empty()
+                    ? not f.have_eventdetection_events(eventdetection_group())
+                    : not f.have_eventdetection_events())
                 {
                     LOG("Fast5_Summary", info) << file_name << ": no eventdetection events" << std::endl;
                     break;
@@ -137,7 +145,9 @@ public:
                     break;
                 }
                 // get ed event params
-                auto ed_params = f.get_eventdetection_event_params(); // can throw
+                auto ed_params = (not eventdetection_group().empty()
+                                  ? f.get_eventdetection_event_params(eventdetection_group())
+                                  : f.get_eventdetection_event_params()); // can throw
                 if (not ed_params.read_id.empty())
                 {
                     read_id = ed_params.read_id;
@@ -363,7 +373,11 @@ public:
 private:
     void load_ed_events(fast5::File* f_p)
     {
-        ed_events_ptr = decltype(ed_events_ptr)(new typename decltype(ed_events_ptr)::element_type(f_p->get_eventdetection_events()));
+        ed_events_ptr = decltype(ed_events_ptr)(
+            new typename decltype(ed_events_ptr)::element_type(
+                not eventdetection_group().empty()
+                ? f_p->get_eventdetection_events(eventdetection_group())
+                : f_p->get_eventdetection_events()));
     }
 
     // crude detection of abasic level
