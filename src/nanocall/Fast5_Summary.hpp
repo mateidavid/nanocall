@@ -16,12 +16,12 @@
 #include "fast5.hpp"
 #include "alg.hpp"
 
-template < typename Float_Type >
+template < typename Float_Type, unsigned Kmer_Size >
 class Fast5_Summary
 {
 public:
-    typedef Pore_Model< Float_Type > Pore_Model_Type;
-    typedef Pore_Model_Dict< Float_Type > Pore_Model_Dict_Type;
+    typedef Pore_Model< Float_Type, Kmer_Size > Pore_Model_Type;
+    typedef Pore_Model_Dict< Float_Type, Kmer_Size > Pore_Model_Dict_Type;
     typedef Pore_Model_Parameters< Float_Type > Pore_Model_Parameters_Type;
     typedef Event< Float_Type > Event_Type;
     typedef Event_Sequence< Float_Type > Event_Sequence_Type;

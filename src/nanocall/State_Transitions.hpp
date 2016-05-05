@@ -11,7 +11,7 @@
 #include "logsumset.hpp"
 #include "logger.hpp"
 
-template < typename Float_Type, unsigned Kmer_Size = 6 >
+template < typename Float_Type >
 struct State_Transition_Parameters
 {
     Float_Type p_stay;

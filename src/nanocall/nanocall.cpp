@@ -33,16 +33,19 @@ long get_cpu_time_ms()
 #ifndef FLOAT_TYPE
 #define FLOAT_TYPE float
 #endif
-typedef State_Transitions< FLOAT_TYPE > State_Transitions_Type;
+#ifndef KMER_SIZE
+#define KMER_SIZE 6
+#endif
+typedef State_Transitions< FLOAT_TYPE, KMER_SIZE > State_Transitions_Type;
 typedef State_Transition_Parameters< FLOAT_TYPE > State_Transition_Parameters_Type;
-typedef Pore_Model< FLOAT_TYPE > Pore_Model_Type;
-typedef Pore_Model_Dict< FLOAT_TYPE > Pore_Model_Dict_Type;
+typedef Pore_Model< FLOAT_TYPE, KMER_SIZE > Pore_Model_Type;
+typedef Pore_Model_Dict< FLOAT_TYPE, KMER_SIZE > Pore_Model_Dict_Type;
 typedef Pore_Model_Parameters< FLOAT_TYPE > Pore_Model_Parameters_Type;
 typedef Event< FLOAT_TYPE > Event_Type;
 typedef Event_Sequence< FLOAT_TYPE > Event_Sequence_Type;
-typedef Fast5_Summary< FLOAT_TYPE > Fast5_Summary_Type;
-typedef Parameter_Trainer< FLOAT_TYPE > Parameter_Trainer_Type;
-typedef Viterbi< FLOAT_TYPE > Viterbi_Type;
+typedef Fast5_Summary< FLOAT_TYPE, KMER_SIZE > Fast5_Summary_Type;
+typedef Parameter_Trainer< FLOAT_TYPE, KMER_SIZE > Parameter_Trainer_Type;
+typedef Viterbi< FLOAT_TYPE, KMER_SIZE > Viterbi_Type;
 
 namespace opts
 {

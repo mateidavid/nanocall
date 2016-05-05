@@ -266,7 +266,7 @@ private:
     }
 }; // class Pore_Model
 
-template < typename Float_Type >
-using Pore_Model_Dict = std::map< std::string, Pore_Model< Float_Type > >;
+template < typename Float_Type, unsigned Kmer_Size >
+using Pore_Model_Dict = std::map< std::string, Pore_Model< Float_Type, Kmer_Size > >;
 
 #endif
