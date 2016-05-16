@@ -36,9 +36,9 @@ To avoid dealing with prerequisites, Nanocall can be conveniently built under Do
 Example build:
 
 #+BEGIN_EXAMPLE
-mkdir /some/source/dir && cd /some/source/dir
-git clone --recursive https://github.com/mateidavid/nanocall.git
-docker build -t nanocall /some/source/dir
+mkdir /some/temp/dir && cd /some/temp/dir
+wget https://raw.githubusercontent.com/mateidavid/nanocall/master/Dockerfile
+docker build -t nanocall /some/temp/dir
 docker run --rm nanocall
 #+END_EXAMPLE
 
