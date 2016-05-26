@@ -115,6 +115,11 @@ public:
             {
                 // open file
                 f.open(file_name); // can throw
+                if (not f.have_sampling_rate())
+                {
+                    LOG("Fast5_Summary", info) << file_name << ": missing sampling rate" << std::endl;
+                    break;
+                }
                 // get sampling rate
                 sampling_rate = f.get_sampling_rate(); // can throw
                 if (sampling_rate < 1000.0 or sampling_rate > 10000.0)
