@@ -30,6 +30,7 @@ public:
     std::string file_name;
     std::string base_file_name;
     std::string read_id;
+    std::string bc_grp;
     std::array< std::array< std::string, 2 >, 3 > preferred_model;
     std::map< std::array< std::string, 2 >, Pore_Model_Parameters_Type > pm_params_m;
     std::map< std::array< std::string, 2 >, std::array< State_Transition_Parameters_Type, 2 > > st_params_m;
@@ -242,6 +243,37 @@ public:
                         }
                     }
                 }
+                // detect basecall group to write
+                auto bc_grp_l = f.get_basecall_group_list();
+                static const std::string bc_grp_prefix("Nanocall_");
+                std::set< std::string > used_tags;
+                for (const auto& bc_grp : bc_grp_l)
+                {
+                    if (bc_grp.size() <= bc_grp_prefix.size()) continue;
+                    auto p = std::mismatch(bc_grp_prefix.begin(),
+                                           bc_grp_prefix.end(),
+                                           bc_grp.begin());
+                    if (p.first != bc_grp_prefix.end()) continue;
+                    std::string tag(p.second, bc_grp.end());
+                    std::clog << "found basecall group: " << tag << std::endl;
+                    used_tags.emplace(std::move(tag));
+                }
+                for (unsigned i = 0; i < 1000; ++i)
+                {
+                    std::ostringstream tmp;
+                    tmp << std::setw(3) << std::setfill('0') << i;
+                    if (not used_tags.count(tmp.str()))
+                    {
+                        bc_grp = bc_grp_prefix + tmp.str();
+                        break;
+                    }
+                }
+                if (bc_grp.empty())
+                {
+                    LOG(error)
+                        << "no available basecall tag" << std::endl;
+                    std::exit(EXIT_FAILURE);
+                }
             }
             catch (hdf5_tools::Exception& e)
             {
@@ -307,6 +339,21 @@ public:
         for (unsigned st = 0; st < 2; ++st)
         {
             events_ptr[st].reset();
+        }
+    }
+
+    void add_basecall_seq(const std::string& name, const std::string& seq, unsigned st, int default_qual = 33) const
+    {
+        try
+        {
+            // open file
+            fast5::File f(file_name, true); // can throw
+            // write seq
+            f.add_basecall_seq(bc_grp, st, name, seq, default_qual);
+        }
+        catch (hdf5_tools::Exception& e)
+        {
+            LOG(warning) << file_name << ": HDF5 error: " << e.what() << std::endl;
         }
     }
 

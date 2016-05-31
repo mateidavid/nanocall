@@ -80,6 +80,7 @@ namespace opts
     ValueArg< string > model_fofn("", "model-fofn", "File of pore models.", false, "", "file", cmd_parser);
     MultiArg< string > model_fn("m", "model", "Custom pore model.", false, "file", cmd_parser);
     //
+    SwitchArg write_fast5("", "write-fast5", "Write basecalls to fast5 files.", cmd_parser);
     ValueArg< string > output_fn("o", "output", "Output.", false, "", "file", cmd_parser);
     ValueArg< unsigned > num_threads("t", "threads", "Number of parallel threads.", false, 1, "int", cmd_parser);
     UnlabeledMultiArg< string > input_fn("inputs", "Inputs. Accepts: directories, fast5 files, or files of fast5 file names (use \"-\" to read fofn from stdin).", true, "path", cmd_parser);
@@ -727,9 +728,20 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                     read_summary.preferred_model[st][st] = best_m_name[st];
                     read_summary.pm_params_m[read_summary.preferred_model[st]] = best_pm_params;
                     read_summary.st_params_m[read_summary.preferred_model[st]][st] = best_st_params[st];
-                    ostringstream tmp;
-                    tmp << read_summary.read_id << ":" << read_summary.base_file_name << ":" << st;
-                    write_fasta(oss, tmp.str(), *base_seq_ptr[st]);
+                    string seq_name;
+                    {
+                        ostringstream tmp;
+                        tmp << read_summary.read_id << ":" << read_summary.base_file_name << ":" << st;
+                        seq_name = tmp.str();
+                    }
+                    if (opts::write_fast5)
+                    {
+                        read_summary.add_basecall_seq(seq_name, *base_seq_ptr[st], st);
+                    }
+                    else
+                    {
+                        write_fasta(oss, seq_name, *base_seq_ptr[st]);
+                    }
                 }
             }
             else // not scale_strands_together
@@ -781,9 +793,20 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                         << "] st_params [" << read_summary.st_params_m.at(best_m_key)[st]
                         << "] log_path_prob [" << get<0>(results.back()) << "]" << endl;
                     read_summary.preferred_model[st][st] = best_m_name;
-                    ostringstream tmp;
-                    tmp << read_summary.read_id << ":" << read_summary.base_file_name << ":" << st;
-                    write_fasta(oss, tmp.str(), base_seq);
+                    string seq_name;
+                    {
+                        ostringstream tmp;
+                        tmp << read_summary.read_id << ":" << read_summary.base_file_name << ":" << st;
+                        seq_name = tmp.str();
+                    }
+                    if (opts::write_fast5)
+                    {
+                        read_summary.add_basecall_seq(seq_name, base_seq, st);
+                    }
+                    else
+                    {
+                        write_fasta(oss, seq_name, base_seq);
+                    }
                 } // for st
             }
             read_summary.drop_events();
@@ -903,6 +926,12 @@ int main(int argc, char * argv[])
     {
         LOG(error)
             << "invalid scaling_min_progress: " << opts::scaling_min_progress.get() << endl;
+        return EXIT_FAILURE;
+    }
+    if (not opts::output_fn.get().empty() and opts::write_fast5)
+    {
+        LOG(error)
+            << "output may be written to fast5 files or to a single output file, but not both" << endl;
         return EXIT_FAILURE;
     }
     //
