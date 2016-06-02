@@ -76,10 +76,10 @@ struct Pore_Model_Parameters
     }
 }; // struct Pore_Model_Parameters
 
-template < typename Float_Type >
+template < typename Float_Type, unsigned Kmer_Size >
 struct Pore_Model_State
 {
-    typedef Event< Float_Type > Event_Type;
+    typedef Event< Float_Type, Kmer_Size > Event_Type;
     typedef Pore_Model_Parameters< Float_Type > Pore_Model_Parameters_Type;
 
     Float_Type level_mean;
@@ -94,12 +94,15 @@ struct Pore_Model_State
     Float_Type log_sd_stdv;
     Float_Type log_sd_lambda;
 
+    std::array< char, Kmer_Size > kmer;
+
     Pore_Model_State& operator = (const fast5::Model_Entry& e)
     {
         level_mean = e.level_mean;
         level_stdv = e.level_stdv;
         sd_mean = e.sd_mean;
         sd_stdv = e.sd_stdv;
+        std::copy_n(e.kmer.begin(), Kmer_Size, kmer.begin());
         update_sd_lambda();
         update_logs();
         return *this;
@@ -136,10 +139,16 @@ struct Pore_Model_State
         return (log_normal_pdf< Float_Type >(e.mean, level_mean, level_stdv, log_level_stdv)
                 + log_invgauss_pdf< Float_Type >(e.stdv, e.log_stdv, sd_mean, sd_lambda, log_sd_lambda));
     }
+    Float_Type log_pr_corrected_emission(const Event_Type& e) const
+    {
+        return (log_normal_pdf< Float_Type >(e.corrected_mean, level_mean, level_stdv, log_level_stdv)
+                + log_invgauss_pdf< Float_Type >(e.stdv, e.log_stdv, sd_mean, sd_lambda, log_sd_lambda));
+    }
 
     friend std::ostream& operator << (std::ostream& os, const Pore_Model_State& state)
     {
-        os << state.level_mean << '\t'
+        os << std::string(state.kmer.begin(), state.kmer.end()) << '\t'
+           << state.level_mean << '\t'
            << state.level_stdv << '\t'
            << state.sd_mean << '\t'
            << state.sd_stdv;
@@ -152,8 +161,8 @@ class Pore_Model
 {
 public:
     typedef Kmer< Kmer_Size > Kmer_Type;
-    typedef Event< Float_Type > Event_Type;
-    typedef Pore_Model_State< Float_Type > Pore_Model_State_Type;
+    typedef Event< Float_Type, Kmer_Size > Event_Type;
+    typedef Pore_Model_State< Float_Type, Kmer_Size > Pore_Model_State_Type;
     typedef Pore_Model_Parameters< Float_Type > Pore_Model_Parameters_Type;
     static const unsigned n_states = 1u << (2 * Kmer_Size);
 
@@ -162,6 +171,8 @@ public:
 
     const Pore_Model_State_Type& state(unsigned i) const { return _state.at(i); }
     Pore_Model_State_Type& state(unsigned i) { return _state.at(i); }
+
+    const std::vector< Pore_Model_State_Type >& get_state_vector() const { return _state; }
 
     const unsigned& strand() const { return _strand; }
     unsigned& strand() { return _strand; }
@@ -207,6 +218,8 @@ public:
             state(i).level_stdv = v[4 * i + 1];
             state(i).sd_mean = v[4 * i + 2];
             state(i).sd_stdv = v[4 * i + 3];
+            auto s = Kmer_Type::to_string(i);
+            std::copy_n(s.begin(), Kmer_Size, state(i).kmer.begin());
             state(i).update_sd_lambda();
             state(i).update_logs();
         }
@@ -218,7 +231,7 @@ public:
     {
         for (unsigned i = 0; i < pm.n_states; ++i)
         {
-            os << Kmer_Type::to_string(i) << '\t' << pm.state(i) << std::endl;
+            os << pm.state(i) << std::endl;
         }
         return os;
     }
@@ -227,18 +240,41 @@ public:
     {
         pm._state.clear();
         pm._state.reserve(n_states);
-        for (unsigned i = 0; i < pm.n_states; ++i)
+        unsigned i = 0;
+        std::string line;
+        while (std::getline(is, line))
         {
+            std::istringstream iss(line);
             std::string s;
-            is >> s;
-            assert(Kmer_Type::to_int(s) == i);
+            iss >> s;
+            if (s[0] == '#') continue;
+            if (line.find("kmer") != std::string::npos) continue;
             pm._state.emplace_back();
-            is >> pm.state(i).level_mean
-               >> pm.state(i).level_stdv
-               >> pm.state(i).sd_mean
-               >> pm.state(i).sd_stdv;
+            iss >> pm.state(i).level_mean
+                >> pm.state(i).level_stdv
+                >> pm.state(i).sd_mean
+                >> pm.state(i).sd_stdv;
+            std::copy_n(s.begin(), Kmer_Size, pm.state(i).kmer.begin());
             pm.state(i).update_sd_lambda();
             pm.state(i).update_logs();
+            ++i;
+        }
+        if (i != pm.n_states)
+        {
+            LOG(error)
+                << "unexpected number of states" << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+        std::sort(
+            pm._state.begin(),
+            pm._state.end(),
+            [] (const Pore_Model_State_Type& lhs, const Pore_Model_State_Type& rhs)
+            {
+                return lhs.kmer < rhs.kmer;
+            });
+        for (unsigned i = 0; i < pm.n_states; ++i)
+        {
+            assert(Kmer_Type::to_int(pm.state(i).kmer) == i);
         }
         pm.update_statistics();
         return is;
@@ -248,6 +284,11 @@ public:
     Float_Type log_pr_emission(unsigned i, const Event_Type& e) const
     {
         Float_Type res = state(i).log_pr_emission(e);
+        return res;
+    }
+    Float_Type log_pr_corrected_emission(unsigned i, const Event_Type& e) const
+    {
+        Float_Type res = state(i).log_pr_corrected_emission(e);
         return res;
     }
 

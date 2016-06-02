@@ -14,11 +14,14 @@ using namespace std;
 #ifndef FLOAT_TYPE
 #define FLOAT_TYPE float
 #endif
-typedef State_Transitions< FLOAT_TYPE > State_Transitions_Type;
-typedef Pore_Model< FLOAT_TYPE > Pore_Model_Type;
-typedef Event< FLOAT_TYPE > Event_Type;
-typedef Event_Sequence< FLOAT_TYPE > Event_Sequence_Type;
-typedef Viterbi< FLOAT_TYPE > Viterbi_Type;
+#ifndef KMER_SIZE
+#define KMER_SIZE 6
+#endif
+typedef State_Transitions< FLOAT_TYPE, KMER_SIZE > State_Transitions_Type;
+typedef Pore_Model< FLOAT_TYPE, KMER_SIZE > Pore_Model_Type;
+typedef Event< FLOAT_TYPE, KMER_SIZE > Event_Type;
+typedef Event_Sequence< FLOAT_TYPE, KMER_SIZE > Event_Sequence_Type;
+typedef Viterbi< FLOAT_TYPE, KMER_SIZE > Viterbi_Type;
 
 namespace opts
 {
@@ -50,7 +53,7 @@ void real_main()
 
     Viterbi_Type vit;
     vit.fill(pm, st, ev);
-    cout << vit.base_seq() << std::endl;
+    cout << ev.get_base_seq() << std::endl;
 }
 
 int main(int argc, char * argv[])

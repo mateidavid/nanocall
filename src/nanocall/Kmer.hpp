@@ -34,6 +34,10 @@ public:
         }
         return res;
     }
+    static size_t to_int(const std::array< char, Kmer_Size >& a)
+    {
+        return to_int(std::string(a.begin(), a.end()));
+    }
     static std::string to_string(size_t k)
     {
         static const std::string int_to_base("ACGT");

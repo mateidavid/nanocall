@@ -23,8 +23,8 @@ public:
     typedef Pore_Model< Float_Type, Kmer_Size > Pore_Model_Type;
     typedef Pore_Model_Dict< Float_Type, Kmer_Size > Pore_Model_Dict_Type;
     typedef Pore_Model_Parameters< Float_Type > Pore_Model_Parameters_Type;
-    typedef Event< Float_Type > Event_Type;
-    typedef Event_Sequence< Float_Type > Event_Sequence_Type;
+    typedef Event< Float_Type, Kmer_Size > Event_Type;
+    typedef Event_Sequence< Float_Type, Kmer_Size > Event_Sequence_Type;
     typedef State_Transition_Parameters< Float_Type > State_Transition_Parameters_Type;
 
     std::string file_name;
@@ -321,6 +321,7 @@ public:
                 {
                     Event_Type e;
                     e.mean = ed_events()[j].mean;
+                    e.corrected_mean = e.mean;
                     e.stdv = ed_events()[j].stdv;
                     e.start = (ed_events()[j].start - ed_events()[strand_bounds[scale_strands_together? 0 : 2 * st]].start) / sampling_rate;
                     e.length = ed_events()[j].length / sampling_rate;
@@ -342,7 +343,7 @@ public:
         }
     }
 
-    void add_basecall_seq(const std::string& name, const std::string& seq, unsigned st, int default_qual = 33) const
+    void add_basecall_seq(const std::string& name, unsigned st, const std::string& seq, int default_qual = 33) const
     {
         try
         {
@@ -350,6 +351,51 @@ public:
             fast5::File f(file_name, true); // can throw
             // write seq
             f.add_basecall_seq(bc_grp, st, name, seq, default_qual);
+        }
+        catch (hdf5_tools::Exception& e)
+        {
+            LOG(warning) << file_name << ": HDF5 error: " << e.what() << std::endl;
+        }
+    }
+
+    void add_basecall_events(unsigned st, const Event_Sequence_Type& ev) const
+    {
+        try
+        {
+            // open file
+            fast5::File f(file_name, true); // can throw
+            // write seq
+            f.add_basecall_events(bc_grp, st, ev);
+        }
+        catch (hdf5_tools::Exception& e)
+        {
+            LOG(warning) << file_name << ": HDF5 error: " << e.what() << std::endl;
+        }
+    }
+
+    void add_basecall_model(unsigned st, const Pore_Model_Type& model) const
+    {
+        try
+        {
+            // open file
+            fast5::File f(file_name, true); // can throw
+            // write model params
+            f.add_basecall_model(bc_grp, st, model.get_state_vector());
+        }
+        catch (hdf5_tools::Exception& e)
+        {
+            LOG(warning) << file_name << ": HDF5 error: " << e.what() << std::endl;
+        }
+    }
+
+    void add_basecall_model_params(unsigned st, const Pore_Model_Parameters_Type& params) const
+    {
+        try
+        {
+            // open file
+            fast5::File f(file_name, true); // can throw
+            // write model params
+            f.add_basecall_model_params(bc_grp, st, params);
         }
         catch (hdf5_tools::Exception& e)
         {

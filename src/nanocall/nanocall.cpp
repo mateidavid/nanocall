@@ -41,8 +41,8 @@ typedef State_Transition_Parameters< FLOAT_TYPE > State_Transition_Parameters_Ty
 typedef Pore_Model< FLOAT_TYPE, KMER_SIZE > Pore_Model_Type;
 typedef Pore_Model_Dict< FLOAT_TYPE, KMER_SIZE > Pore_Model_Dict_Type;
 typedef Pore_Model_Parameters< FLOAT_TYPE > Pore_Model_Parameters_Type;
-typedef Event< FLOAT_TYPE > Event_Type;
-typedef Event_Sequence< FLOAT_TYPE > Event_Sequence_Type;
+typedef Event< FLOAT_TYPE, KMER_SIZE > Event_Type;
+typedef Event_Sequence< FLOAT_TYPE, KMER_SIZE > Event_Sequence_Type;
 typedef Fast5_Summary< FLOAT_TYPE, KMER_SIZE > Fast5_Summary_Type;
 typedef Parameter_Trainer< FLOAT_TYPE, KMER_SIZE > Parameter_Trainer_Type;
 typedef Viterbi< FLOAT_TYPE, KMER_SIZE > Viterbi_Type;
@@ -136,7 +136,10 @@ void init_models(Pore_Model_Dict_Type& models)
                 zstr::ifstream(e) >> pm;
                 pm.strand() = st;
                 models[pm_name] = move(pm);
-                LOG(info) << "loaded module [" << pm_name << "] for strand [" << st << "]" << endl;
+                LOG(info) << "loaded module [" << pm_name
+                          << "] for strand [" << st
+                          << "] statistics [mean=" << pm.mean()
+                          << ", stdv=" << pm.stdv() << "]" << endl;
             }
         }
     }
@@ -151,9 +154,10 @@ void init_models(Pore_Model_Dict_Type& models)
             pm.strand() = Builtin_Model::strands[i];
             models[Builtin_Model::names[i]] = move(pm);
             LOG(info)
-                << "loaded builtin module [" << Builtin_Model::names[i] << "] for strand ["
-                << Builtin_Model::strands[i] << "] statistics [mean=" << pm.mean() << ", stdv="
-                << pm.stdv() << "]" << endl;
+                << "loaded builtin module [" << Builtin_Model::names[i]
+                << "] for strand [" << Builtin_Model::strands[i]
+                << "] statistics [mean=" << pm.mean()
+                << ", stdv=" << pm.stdv() << "]" << endl;
         }
     }
 } // init_models
@@ -667,7 +671,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                 corrected_events.apply_drift_correction(pm_params.drift);
                 Viterbi_Type vit;
                 vit.fill(pm, *transitions_ptr, corrected_events);
-                return std::make_tuple(vit.path_probability(), vit.base_seq());
+                return std::make_tuple(vit.path_probability(), std::move(corrected_events));
             };
 
             if (read_summary.scale_strands_together)
@@ -689,10 +693,13 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                     }
                 }
                 // basecall using applicable models
-                deque< tuple< FLOAT_TYPE, FLOAT_TYPE, FLOAT_TYPE, string, string, string, string > > results;
+                deque< tuple< FLOAT_TYPE,
+                              FLOAT_TYPE, FLOAT_TYPE,
+                              string, string,
+                              Event_Sequence_Type, Event_Sequence_Type > > results;
                 for (const auto& m_name : model_sublist)
                 {
-                    array< tuple< FLOAT_TYPE, string >, 2 > part_results;
+                    array< tuple< FLOAT_TYPE, Event_Sequence_Type >, 2 > part_results;
                     for (unsigned st = 0; st < 2; ++st)
                     {
                         part_results[st] = basecall_strand(
@@ -705,14 +712,25 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                                          get<0>(part_results[1]),
                                          string(m_name[0]),
                                          string(m_name[1]),
-                                         move(get<1>(part_results[0])),
-                                         move(get<1>(part_results[1])));
+                                         std::move(get<1>(part_results[0])),
+                                         std::move(get<1>(part_results[1])));
                 }
                 // sort results by first component (log path probability)
-                sort(results.begin(), results.end());
+                sort(results.begin(),
+                     results.end(),
+                     [] (const decltype(results)::value_type& lhs, const decltype(results)::value_type& rhs) {
+                         return get<0>(lhs) < get<0>(rhs);
+                     });
                 array< FLOAT_TYPE, 2 > best_log_path_prob{{ get<1>(results.back()), get<2>(results.back()) }};
                 array< string, 2 > best_m_name{{ get<3>(results.back()), get<4>(results.back()) }};
-                array< const string*, 2 > base_seq_ptr{{ &get<5>(results.back()), &get<6>(results.back()) }};
+                array< const Event_Sequence_Type*, 2 > event_seq_ptr = {
+                    &get<5>(results.back()),
+                    &get<6>(results.back())
+                };
+                array< string, 2 > base_seq = {
+                    get<5>(results.back()).get_base_seq(),
+                    get<6>(results.back()).get_base_seq()
+                };
                 string best_m_name_str = best_m_name[0] + '+' + best_m_name[1];
                 auto& best_pm_params = read_summary.pm_params_m.at(best_m_name);
                 auto& best_st_params = read_summary.st_params_m.at(best_m_name);
@@ -736,11 +754,14 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                     }
                     if (opts::write_fast5)
                     {
-                        read_summary.add_basecall_seq(seq_name, *base_seq_ptr[st], st);
+                        read_summary.add_basecall_seq(seq_name, st, base_seq[st]);
+                        read_summary.add_basecall_events(st, *event_seq_ptr[st]);
+                        read_summary.add_basecall_model(st, models.at(best_m_name[st]));
+                        read_summary.add_basecall_model_params(st, best_pm_params);
                     }
                     else
                     {
-                        write_fasta(oss, seq_name, *base_seq_ptr[st]);
+                        write_fasta(oss, seq_name, base_seq[st]);
                     }
                 }
             }
@@ -769,7 +790,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                         }
                     }
                     // deque of results
-                    deque< tuple< FLOAT_TYPE, string, string > > results;
+                    deque< tuple< FLOAT_TYPE, string, Event_Sequence_Type > > results;
                     for (const auto& m_name : model_sublist)
                     {
                         auto r = basecall_strand(
@@ -778,11 +799,16 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                             read_summary.st_params_m.at(m_name)[st]);
                         results.emplace_back(get<0>(r),
                                              string(m_name[st]),
-                                             move(get<1>(r)));
+                                             std::move(get<1>(r)));
                     }
-                    sort(results.begin(), results.end());
-                    string& best_m_name = get<1>(results.back());
-                    string& base_seq = get<2>(results.back());
+                    sort(results.begin(),
+                         results.end(),
+                         [] (const decltype(results)::value_type& lhs, const decltype(results)::value_type& rhs) {
+                             return get<0>(lhs) < get<0>(rhs);
+                         });
+                    const string& best_m_name = get<1>(results.back());
+                    const Event_Sequence_Type& event_seq = get<2>(results.back());
+                    string base_seq = event_seq.get_base_seq();
                     array< string, 2 > best_m_key;
                     best_m_key[st] = best_m_name;
                     LOG(info)
@@ -801,7 +827,10 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                     }
                     if (opts::write_fast5)
                     {
-                        read_summary.add_basecall_seq(seq_name, base_seq, st);
+                        read_summary.add_basecall_seq(seq_name, st, base_seq);
+                        read_summary.add_basecall_events(st, event_seq);
+                        read_summary.add_basecall_model(st, models.at(best_m_name));
+                        read_summary.add_basecall_model_params(st, read_summary.pm_params_m.at(best_m_key));
                     }
                     else
                     {

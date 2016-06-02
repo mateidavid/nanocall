@@ -20,8 +20,8 @@ struct Parameter_Trainer
     typedef Pore_Model_Parameters< Float_Type > Pore_Model_Parameters_Type;
     typedef State_Transitions< Float_Type, Kmer_Size > State_Transitions_Type;
     typedef State_Transition_Parameters< Float_Type > State_Transition_Parameters_Type;
-    typedef Event< Float_Type > Event_Type;
-    typedef Event_Sequence< Float_Type > Event_Sequence_Type;
+    typedef Event< Float_Type, Kmer_Size > Event_Type;
+    typedef Event_Sequence< Float_Type, Kmer_Size > Event_Sequence_Type;
     typedef Forward_Backward< Float_Type, Kmer_Size > Forward_Backward_Type;
     typedef logsum::logsumset< Float_Type > LogSumSet_Type;
 

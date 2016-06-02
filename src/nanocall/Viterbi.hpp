@@ -10,6 +10,7 @@
 #include "State_Transitions.hpp"
 #include "logsumset.hpp"
 #include "logger.hpp"
+#include "fast5.hpp"
 
 template < typename Float_Type, unsigned Kmer_Size = 6 >
 class Viterbi
@@ -18,8 +19,8 @@ public:
     typedef Kmer< Kmer_Size > Kmer_Type;
     typedef Pore_Model< Float_Type, Kmer_Size > Pore_Model_Type;
     typedef State_Transitions< Float_Type, Kmer_Size > State_Transitions_Type;
-    typedef Event< Float_Type > Event_Type;
-    typedef Event_Sequence< Float_Type > Event_Sequence_Type;
+    typedef Event< Float_Type, Kmer_Size > Event_Type;
+    typedef Event_Sequence< Float_Type, Kmer_Size > Event_Sequence_Type;
     typedef logsum::logsumset< Float_Type > LogSumSet_Type;
 
     struct Matrix_Entry
@@ -30,10 +31,7 @@ public:
 
     static const unsigned n_states = Pore_Model_Type::n_states;
 
-    void clear() { _m.clear(); _state_seq.clear(); _base_seq.clear(); }
-    unsigned n_events() const { return _state_seq.size(); }
-    const std::vector< unsigned >& state_seq() const { return _state_seq; }
-    const std::string& base_seq() const { return _base_seq; }
+    unsigned n_events() const { return _n_events; }
     Float_Type path_probability() const { return _path_probability; }
 
     // i: event index
@@ -45,12 +43,11 @@ public:
 
     void fill(const Pore_Model_Type& pm,
               const State_Transitions_Type& st,
-              const Event_Sequence_Type& ev)
+              Event_Sequence_Type& ev)
     {
-        clear();
-        unsigned n_events = ev.size();
-        _m.resize(n_states * n_events);
-        _state_seq.resize(n_events);
+        _n_events = ev.size();
+        _m.clear();
+        _m.resize(n_states * n_events());
         Float_Type log_n_states = std::log(static_cast< Float_Type >(n_states));
         //
         // alpha, beta; i == 0
@@ -60,7 +57,7 @@ public:
             for (unsigned j = 0; j < n_states; ++j)
             {
                 // alpha
-                cell(0, j).alpha = pm.log_pr_emission(j, ev[0]) - log_n_states;
+                cell(0, j).alpha = pm.log_pr_corrected_emission(j, ev[0]) - log_n_states;
                 // beta
                 cell(0, j).beta = n_states;
                 LOG("Viterbi", debug2)
@@ -72,7 +69,7 @@ public:
         //
         // alpha, beta; i > 0
         //
-        for (unsigned i = 1; i < n_events; ++i)
+        for (unsigned i = 1; i < n_events(); ++i)
         {
             LOG("Viterbi", debug1) << "forward: i=" << i << std::endl;
             for (unsigned j = 0; j < n_states; ++j) // TODO: parallelize
@@ -90,15 +87,15 @@ public:
                         cell(i, j).beta = j_prev;
                     }
                 }
-                cell(i, j).alpha += pm.log_pr_emission(j, ev[i]);
+                cell(i, j).alpha += pm.log_pr_corrected_emission(j, ev[i]);
                 LOG("Viterbi", debug2)
                     << "i=" << i << " j=" << Kmer_Type::to_string(j)
                     << " alpha=" << cell(i, j).alpha
                     << " beta=" << cell(i, j).beta << std::endl;
             }
         }
-        fill_state_seq();
-        fill_base_seq();
+        fill_state_seq(ev);
+        fill_move_seq(ev);
     }
 
     friend std::ostream& operator << (std::ostream& os, const Viterbi& vit)
@@ -117,12 +114,12 @@ public:
 
 private:
     std::vector< Matrix_Entry > _m;
-    std::vector< unsigned > _state_seq;
-    std::string _base_seq;
     Float_Type _path_probability;
+    unsigned _n_events;
 
-    void fill_state_seq()
+    void fill_state_seq(Event_Sequence_Type& ev)
     {
+        assert(Kmer_Size <= MAX_K_LEN);
         Float_Type max_v = -INFINITY;
         unsigned max_j = n_states;
         for (unsigned j = 0; j < n_states; ++j)
@@ -136,25 +133,20 @@ private:
         _path_probability = max_v;
         for (unsigned i = n_events() - 1; i > 0; --i)
         {
-            _state_seq.at(i) = max_j;
+            ev[i].model_state_idx = max_j;
+            ev[i].set_model_state(Kmer_Type::to_string(ev[i].model_state_idx));
             max_j = cell(i, max_j).beta;
         }
-        _state_seq.at(0) = max_j;
+        ev[0].model_state_idx = max_j;
+        ev[0].set_model_state(Kmer_Type::to_string(ev[0].model_state_idx));
     }
 
-    void fill_base_seq()
+    void fill_move_seq(Event_Sequence_Type& ev)
     {
-        for (unsigned i = 0; i < _state_seq.size() - 1; ++i)
+        for (unsigned i = 0; i < n_events(); ++i)
         {
-            auto c = Kmer_Type::min_skip(_state_seq[i], _state_seq[i + 1]);
-            LOG("Viterbi", debug1)
-                << "i=" << i << " state=" << _state_seq[i] << " kmer=" << Kmer_Type::to_string(_state_seq[i]) << " c=" << c << std::endl;
-            _base_seq += Kmer_Type::to_string(_state_seq[i]).substr(0, c);
+            ev[i].move = i > 0? Kmer_Type::min_skip(ev[i - 1].model_state_idx, ev[i].model_state_idx) : 0u;
         }
-        LOG("Viterbi", debug1)
-            << "i=" << n_events() - 1 << " state=" << _state_seq[n_events() - 1]
-            << " kmer=" << Kmer_Type::to_string(_state_seq[n_events() - 1]) << std::endl;
-        _base_seq += Kmer_Type::to_string(_state_seq[n_events() - 1]);
     }
 
 }; // class Viterbi

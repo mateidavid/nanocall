@@ -15,12 +15,15 @@ using namespace std;
 #ifndef FLOAT_TYPE
 #define FLOAT_TYPE float
 #endif
-typedef State_Transitions< FLOAT_TYPE > State_Transitions_Type;
-typedef Pore_Model< FLOAT_TYPE > Pore_Model_Type;
-typedef Event< FLOAT_TYPE > Event_Type;
-typedef Event_Sequence< FLOAT_TYPE > Event_Sequence_Type;
-typedef Forward_Backward< FLOAT_TYPE > Forward_Backward_Type;
-typedef Forward_Backward_Custom< FLOAT_TYPE > Forward_Backward_Custom_Type;
+#ifndef KMER_SIZE
+#define KMER_SIZE 6
+#endif
+typedef State_Transitions< FLOAT_TYPE, KMER_SIZE > State_Transitions_Type;
+typedef Pore_Model< FLOAT_TYPE, KMER_SIZE > Pore_Model_Type;
+typedef Event< FLOAT_TYPE, KMER_SIZE> Event_Type;
+typedef Event_Sequence< FLOAT_TYPE, KMER_SIZE > Event_Sequence_Type;
+typedef Forward_Backward< FLOAT_TYPE, KMER_SIZE > Forward_Backward_Type;
+typedef Forward_Backward_Custom< FLOAT_TYPE, KMER_SIZE > Forward_Backward_Custom_Type;
 
 namespace opts
 {
