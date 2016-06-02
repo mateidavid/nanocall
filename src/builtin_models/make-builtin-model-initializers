@@ -8,7 +8,13 @@ import sys
 description = '''
   Transform the given model files into C++ initializer list suitable for inclusion during preprocessing.
 '''
-default_files = ['0:t.006.ont.model', '1:c.p1.006.ont.model', '1:c.p2.006.ont.model']
+default_files = [
+    '0:r73.t.006.ont.model',
+    '1:r73.c.p1.006.ont.model',
+    '1:r73.c.p2.006.ont.model',
+    '0:r9.t.006.ont.model',
+    '1:r9.c.p1.006.ont.model',
+    '1:r9.c.p2.006.ont.model']
 parser = argparse.ArgumentParser(description=description, epilog='')
 parser.add_argument('input', nargs='*', default=default_files, help='Input models, in the form <strand>:<file>')
 args = parser.parse_args()

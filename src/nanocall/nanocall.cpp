@@ -80,6 +80,7 @@ namespace opts
     ValueArg< string > model_fofn("", "model-fofn", "File of pore models.", false, "", "file", cmd_parser);
     MultiArg< string > model_fn("m", "model", "Custom pore model.", false, "file", cmd_parser);
     //
+    ValueArg< string > pore("", "pore", "Pore name, used to select builtin pore model (default: r9).", false, "r9", "r73|r9", cmd_parser);
     SwitchArg write_fast5("", "write-fast5", "Write basecalls to fast5 files.", cmd_parser);
     ValueArg< string > output_fn("o", "output", "Output.", false, "", "file", cmd_parser);
     ValueArg< unsigned > num_threads("t", "threads", "Number of parallel threads.", false, 1, "int", cmd_parser);
@@ -150,6 +151,7 @@ void init_models(Pore_Model_Dict_Type& models)
         {
             Pore_Model_Type pm;
             string pm_name = Builtin_Model::names[i];
+            if (pm_name.compare(0, opts::pore.get().size() + 1, opts::pore.get() + ".")) continue;
             pm.load_from_vector(Builtin_Model::init_lists[i]);
             pm.strand() = Builtin_Model::strands[i];
             models[Builtin_Model::names[i]] = move(pm);
@@ -158,6 +160,12 @@ void init_models(Pore_Model_Dict_Type& models)
                 << "] for strand [" << Builtin_Model::strands[i]
                 << "] statistics [mean=" << pm.mean()
                 << ", stdv=" << pm.stdv() << "]" << endl;
+        }
+        if (models.empty())
+        {
+            LOG(error)
+                << "no builtin models found for pore [" << opts::pore.get() << "]" << endl;
+            exit(EXIT_FAILURE);
         }
     }
 } // init_models
