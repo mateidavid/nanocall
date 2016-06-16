@@ -71,16 +71,16 @@ public:
         return *events_ptr[st];
     }
 
-    static unsigned& min_read_len()
+    static unsigned& min_ed_events()
     {
-        static unsigned _min_read_len = 1000;
-        return _min_read_len;
+        static unsigned _min_ed_events = 1000;
+        return _min_ed_events;
     }
 
-    static unsigned& max_read_len()
+    static unsigned& max_ed_events()
     {
-        static unsigned _max_read_len = 50000;
-        return _max_read_len;
+        static unsigned _max_ed_events = 100000;
+        return _max_ed_events;
     }
 
     static std::string& eventdetection_group()
@@ -146,13 +146,13 @@ public:
                 }
                 load_ed_events(&f);
                 num_ed_events = ed_events().size();
-                if (num_ed_events < 100 + min_read_len())
+                if (num_ed_events < 100 + min_ed_events())
                 {
                     LOG("Fast5_Summary", info) << file_name << ": not enough eventdetection events: " << num_ed_events << std::endl;
                     num_ed_events = 0;
                     break;
                 }
-                if (num_ed_events > max_read_len())
+                if (num_ed_events > max_ed_events())
                 {
                     LOG("Fast5_Summary", info) << file_name << ": too many eventdetection events: " << num_ed_events << std::endl;
                     num_ed_events = 0;
@@ -175,13 +175,13 @@ public:
                     break;
                 }
                 scale_strands_together = (sst
-                                          and strand_bounds[1] - strand_bounds[0] >= min_read_len()
-                                          and strand_bounds[3] - strand_bounds[2] >= min_read_len());
+                                          and strand_bounds[1] - strand_bounds[0] >= min_ed_events()
+                                          and strand_bounds[3] - strand_bounds[2] >= min_ed_events());
                 // compute time lengths
                 load_events(&f);
                 for (unsigned st = 0; st < 2; ++st)
                 {
-                    if (events(st).size() < min_read_len()) continue;
+                    if (events(st).size() < min_ed_events()) continue;
                     time_length[st] = events(st).rbegin()->start + events(st).rbegin()->length;
                 }
                 //
@@ -219,7 +219,7 @@ public:
                 {
                     for (unsigned st = 0; st < 2; ++st)
                     {
-                        if (events(st).size() < min_read_len()) continue;
+                        if (events(st).size() < min_ed_events()) continue;
                         auto r = alg::mean_stdv_of< Float_Type >(
                             events(st),
                             [] (const Event_Type& ev) { return ev.mean; });
@@ -481,7 +481,7 @@ private:
     // crude detection of abasic level
     Float_Type detect_abasic_level()
     {
-        if (ed_events().size() < min_read_len())
+        if (ed_events().size() < min_ed_events())
         {
             return 0.0;
         }
@@ -502,7 +502,7 @@ private:
     // crude detection of abasic level
     Float_Type detect_abasic_level_2()
     {
-        if (ed_events().size() < min_read_len())
+        if (ed_events().size() < min_ed_events())
         {
             return 0.0;
         }

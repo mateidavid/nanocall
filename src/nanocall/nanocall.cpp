@@ -57,8 +57,8 @@ namespace opts
     ValueArg< unsigned > chunk_size("", "chunk-size", "Thread chunk size.", false, 1, "int", cmd_parser);
     MultiArg< string > log_level("", "log", "Log level. (default: info)", false, "string", cmd_parser);
     ValueArg< string > stats_fn("", "stats", "Stats.", false, "", "file", cmd_parser);
-    ValueArg< unsigned > max_read_len("", "max-len", "Maximum read length.", false, 100000, "int", cmd_parser);
-    ValueArg< unsigned > min_read_len("", "min-len", "Minimum read length.", false, 10, "int", cmd_parser);
+    ValueArg< unsigned > max_ed_events("", "max-ed-events", "Maximum EventDetection events.", false, 100000, "int", cmd_parser);
+    ValueArg< unsigned > min_ed_events("", "min-ed-events", "Minimum EventDetection events.", false, 10, "int", cmd_parser);
     ValueArg< unsigned > fasta_line_width("", "fasta-line-width", "Maximum fasta line width.", false, 80, "int", cmd_parser);
     //
     ValueArg< float > scaling_select_threshold("", "scaling-select-threshold", "Select best model per strand during scaling if log score better by threshold.", false, 20.0, "float", cmd_parser);
@@ -294,7 +294,7 @@ void train_reads(const Pore_Model_Dict_Type& models,
             for (unsigned st = 0; st < 2; ++st)
             {
                 // if not enough events, ignore strand
-                if (read_summary.events(st).size() < opts::min_read_len) continue;
+                if (read_summary.events(st).size() < opts::min_ed_events) continue;
                 // create list of models to try
                 if (not read_summary.preferred_model[st][st].empty())
                 {
@@ -321,7 +321,7 @@ void train_reads(const Pore_Model_Dict_Type& models,
             for (unsigned st = 0; st < 2; ++st)
             {
                 // if not enough events, ignore strand
-                if (read_summary.events(st).size() < opts::min_read_len) continue;
+                if (read_summary.events(st).size() < opts::min_ed_events) continue;
                 // create 2 event sequences on which to train
                 unsigned num_train_events = min((size_t)opts::scaling_num_events.get(), read_summary.events(st).size());
                 train_event_seqs[st].emplace_back(
@@ -456,7 +456,7 @@ void train_reads(const Pore_Model_Dict_Type& models,
                 for (unsigned st = 0; st < 2; ++st)
                 {
                     // if not enough events, ignore strand
-                    if (read_summary.events(st).size() < opts::min_read_len) continue;
+                    if (read_summary.events(st).size() < opts::min_ed_events) continue;
                     // prepare vector of event sequences
                     vector< pair< const Event_Sequence_Type*, unsigned > > train_event_seq_ptrs;
                     for (const auto& events : train_event_seqs[st])
@@ -622,7 +622,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
             for (unsigned st = 0; st < 2; ++st)
             {
                 // if not enough events, ignore strand
-                if (read_summary.events(st).size() < opts::min_read_len) continue;
+                if (read_summary.events(st).size() < opts::min_ed_events) continue;
                 r_stats[st] = alg::mean_stdv_of< FLOAT_TYPE >(
                     read_summary.events(st),
                     [] (const Event_Type& ev) { return ev.mean; });
@@ -778,7 +778,7 @@ void basecall_reads(const Pore_Model_Dict_Type& models,
                 for (unsigned st = 0; st < 2; ++st)
                 {
                     // if not enough events, ignore strand
-                    if (read_summary.events(st).size() < opts::min_read_len) continue;
+                    if (read_summary.events(st).size() < opts::min_ed_events) continue;
                     // create list of models to try
                     list< array< string, 2 > > model_sublist;
                     if (not read_summary.preferred_model[st][st].empty())
@@ -915,8 +915,8 @@ int main(int argc, char * argv[])
 #endif
     State_Transition_Parameters_Type::default_p_stay() = opts::pr_stay;
     State_Transition_Parameters_Type::default_p_skip() = opts::pr_skip;
-    Fast5_Summary_Type::min_read_len() = opts::min_read_len;
-    Fast5_Summary_Type::max_read_len() = opts::max_read_len;
+    Fast5_Summary_Type::min_ed_events() = opts::min_ed_events;
+    Fast5_Summary_Type::max_ed_events() = opts::max_ed_events;
     Fast5_Summary_Type::eventdetection_group() = opts::ed_group;
     //
     // set training option
