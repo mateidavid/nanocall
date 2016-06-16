@@ -128,6 +128,14 @@ public:
                     LOG("Fast5_Summary", warning) << file_name << ": unexpected sampling rate: " << sampling_rate << std::endl;
                     break;
                 }
+                // get ed event params
+                auto ed_params = (not eventdetection_group().empty()
+                                  ? f.get_eventdetection_event_params(eventdetection_group())
+                                  : f.get_eventdetection_event_params()); // can throw
+                if (not ed_params.read_id.empty())
+                {
+                    read_id = ed_params.read_id;
+                }
                 // get ed events
                 if (not eventdetection_group().empty()
                     ? not f.have_eventdetection_events(eventdetection_group())
@@ -149,14 +157,6 @@ public:
                     LOG("Fast5_Summary", info) << file_name << ": too many eventdetection events: " << num_ed_events << std::endl;
                     num_ed_events = 0;
                     break;
-                }
-                // get ed event params
-                auto ed_params = (not eventdetection_group().empty()
-                                  ? f.get_eventdetection_event_params(eventdetection_group())
-                                  : f.get_eventdetection_event_params()); // can throw
-                if (not ed_params.read_id.empty())
-                {
-                    read_id = ed_params.read_id;
                 }
                 // get abasic level
                 abasic_level = detect_abasic_level();

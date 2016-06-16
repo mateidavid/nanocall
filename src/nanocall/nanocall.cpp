@@ -57,7 +57,7 @@ namespace opts
     ValueArg< unsigned > chunk_size("", "chunk-size", "Thread chunk size.", false, 1, "int", cmd_parser);
     MultiArg< string > log_level("", "log", "Log level. (default: info)", false, "string", cmd_parser);
     ValueArg< string > stats_fn("", "stats", "Stats.", false, "", "file", cmd_parser);
-    ValueArg< unsigned > max_read_len("", "max-len", "Maximum read length.", false, 50000, "int", cmd_parser);
+    ValueArg< unsigned > max_read_len("", "max-len", "Maximum read length.", false, 100000, "int", cmd_parser);
     ValueArg< unsigned > min_read_len("", "min-len", "Minimum read length.", false, 10, "int", cmd_parser);
     ValueArg< unsigned > fasta_line_width("", "fasta-line-width", "Maximum fasta line width.", false, 80, "int", cmd_parser);
     //
