@@ -84,7 +84,7 @@ version=$(
     (eval "$version_command" 2>/dev/null && log "got version from: $version_command") ||
     (cat "$version_file" 2>/dev/null && log "got version from file: $version_file") ||
     ([ -d "$project_root" ] &&
-        name=$(basename "$(readlink -e "$project_root")") &&
+        name=$(basename "$(cd "$project_root"; pwd -P)") &&
         [[ "$name" =~ -v?[0-9]+.[0-9]+(.[0-9]+)?$ ]] &&
         echo "${name##*-}" &&
         log "got version from project root folder") ||
