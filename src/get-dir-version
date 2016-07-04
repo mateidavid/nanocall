@@ -31,6 +31,10 @@ Other options:
 EOF
 }
 
+log() {
+    ! [ $verbose ] || echo "$@" >&2
+}
+
 dir=
 version_command="git describe --always --dirty --tags"
 version_file="VERSION"
@@ -75,31 +79,25 @@ while getopts "d:c:f:r:o:t:vh" OPT "$@"; do
 done
 shift $(($OPTIND - 1))
 
-if [ "$verbose" ]; then
-    exec {fd}>&2
-else
-    exec {fd}>/dev/null
-fi
-
 ! [ "$dir" ] || cd "$dir"
 version=$(
-    (eval "$version_command" 2>/dev/null && echo "got version from: $version_command" >&$fd) ||
-    (cat "$version_file" 2>/dev/null && echo "got version from file: $version_file" >&$fd) ||
+    (eval "$version_command" 2>/dev/null && log "got version from: $version_command") ||
+    (cat "$version_file" 2>/dev/null && log "got version from file: $version_file") ||
     ([ -d "$project_root" ] &&
         name=$(basename "$(readlink -e "$project_root")") &&
         [[ "$name" =~ -v?[0-9]+.[0-9]+(.[0-9]+)?$ ]] &&
         echo "${name##*-}" &&
-        echo "got version from project root folder" >&$fd) ||
-    (echo "unknown" && echo "did not find version" >&$fd))
-echo "found version=$version" >&$fd
+        log "got version from project root folder") ||
+    (echo "unknown" && log "did not find version"))
+log "found version=$version"
 
 if [ -r "$output_file" ]; then
     existing_version=$(awk -v tag="$define_tag" '$1=="#define"&&$2==tag {print $3}' <"$output_file" |
         sed 's/^"//;s/"$//')
     if [ "$existing_version" ]; then
-        echo "found existing_version=$existing_version" >&$fd
+        log "found existing_version=$existing_version"
         if [ "$version" = "$existing_version" ]; then
-            echo "version up to date" >&$fd
+            log "version up to date"
             exit 0
         fi
     fi
