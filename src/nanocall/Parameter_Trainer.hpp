@@ -161,7 +161,7 @@ struct Parameter_Trainer
                 for (unsigned j = 0; j < n_states; ++j)
                 {
                     if (j > 0) ofs << '\t';
-                    ofs << data.scaled_model_v[st].log_pr_emission(j, data.corrected_event_seq_v[k][i]);
+                    ofs << data.scaled_model_v[st].log_pr_corrected_emission(j, data.corrected_event_seq_v[k][i]);
                 }
                 ofs << std::endl;
             }
@@ -443,7 +443,7 @@ struct Parameter_Trainer
                 auto log_joint_prob = [&] (unsigned i, unsigned j1, unsigned j2, Float_Type log_p_trans) {
                     Float_Type p = fwbw.cell(i, j1).alpha
                         + log_p_trans
-                        + scaled_pm.log_pr_emission(j2, corrected_events[i + 1])
+                        + scaled_pm.log_pr_corrected_emission(j2, corrected_events[i + 1])
                         + fwbw.cell(i + 1, j2).beta
                         - fwbw.log_pr_data();
                     LOG(debug2) << "step_prob k=" << k
