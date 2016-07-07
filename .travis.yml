@@ -1,5 +1,7 @@
 # travis.yml for github.com/mateidavid/nanocall
 
+sudo: required
+dist: trusty
 language: cpp
 
 before_install:
