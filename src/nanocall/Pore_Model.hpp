@@ -123,7 +123,7 @@ struct Pore_Model_State
         log_sd_lambda = std::log(sd_lambda);
     }
 
-    void scale(const Pore_Model_Parameters_Type& params)
+    void scale(const Pore_Model_Parameters_Type& params, const Pore_Model_Parameters_Type& log_params)
     {
         // these functions are provided by ONT
         level_mean = level_mean * params.scale + params.shift;
@@ -131,7 +131,10 @@ struct Pore_Model_State
         sd_mean = sd_mean * params.scale_sd;
         sd_lambda = sd_lambda * params.var_sd;
         update_sd_stdv();
-        update_logs();
+        log_level_mean = std::log(level_mean);
+        log_level_stdv += log_params.var;
+        log_sd_mean += log_params.scale_sd;
+        log_sd_lambda += log_params.var_sd;
     }
 
     Float_Type log_pr_emission(const Event_Type& e) const
@@ -181,9 +184,13 @@ public:
 
     void scale(const Pore_Model_Parameters_Type& params)
     {
+        Pore_Model_Parameters_Type log_params;
+        log_params.var = std::log(params.var);
+        log_params.scale_sd = std::log(params.scale_sd);
+        log_params.var_sd = std::log(params.var_sd);
         for(unsigned i = 0; i < n_states; ++i)
         {
-            state(i).scale(params);
+            state(i).scale(params, log_params);
         }
         update_statistics();
     }
