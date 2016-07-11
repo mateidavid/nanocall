@@ -157,6 +157,11 @@ struct Pore_Model_State
            << state.sd_stdv;
         return os;
     }
+
+    friend bool operator < (const Pore_Model_State& lhs, const Pore_Model_State& rhs)
+    {
+        return lhs.kmer < rhs.kmer;
+    }
 }; // struct Pore_Model_State
 
 template < typename Float_Type, unsigned Kmer_Size = 6 >
@@ -272,13 +277,7 @@ public:
                 << "unexpected number of states" << std::endl;
             std::exit(EXIT_FAILURE);
         }
-        std::sort(
-            pm._state.begin(),
-            pm._state.end(),
-            [] (const Pore_Model_State_Type& lhs, const Pore_Model_State_Type& rhs)
-            {
-                return lhs.kmer < rhs.kmer;
-            });
+        std::sort(pm._state.begin(), pm._state.end());
         for (unsigned i = 0; i < pm.n_states; ++i)
         {
             assert(Kmer_Type::to_int(pm.state(i).kmer) == i);
