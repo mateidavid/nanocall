@@ -10,7 +10,7 @@
 #   HDF5_INCLUDE_DIRS_CACHED
 #   HDF5_LIBRARIES_CACHED
 
-if(NOT "${HDF5_ROOT}" STREQUAL "${OLD_HDF5_ROOT}")
+if(NOT "${OLD_HDF5_ROOT}" OR NOT "${HDF5_ROOT}" STREQUAL "${OLD_HDF5_ROOT}")
     message(STATUS "Detecting HDF5: redetecing with new HDF5_ROOT=${HDF5_ROOT} (OLD_HDF5_ROOT=${OLD_HDF5_ROOT}).")
     unset(HDF5_INCLUDE_DIRS_CACHED CACHE)
     unset(HDF5_LIBRARIES_CACHED CACHE)
@@ -23,7 +23,7 @@ set(OLD_HDF5_ROOT ${HDF5_ROOT} CACHE INTERNAL "Last used value of HDF5_ROOT")
 
 # find headers
 find_path(HDF5_INCLUDE_DIRS_CACHED H5pubconf.h PATHS ${HDF5_ROOT}/include NO_DEFAULT_PATH)
-find_path(HDF5_INCLUDE_DIRS_CACHED H5pubconf.h)
+find_path(HDF5_INCLUDE_DIRS_CACHED H5pubconf.h PATH_SUFFIXES hdf5 hdf5/serial)
 if(HDF5_INCLUDE_DIRS_CACHED)
     execute_process(
         COMMAND grep H5_VERSION ${HDF5_INCLUDE_DIRS_CACHED}/H5pubconf.h
@@ -36,7 +36,7 @@ endif()
 
 # find library
 find_library(HDF5_LIBRARIES_CACHED hdf5 PATHS ${HDF5_ROOT}/lib ${HDF5_ROOT}/lib64 NO_DEFAULT_PATH)
-find_library(HDF5_LIBRARIES_CACHED hdf5)
+find_library(HDF5_LIBRARIES_CACHED hdf5 PATH_SUFFIXES hdf5 hdf5/serial)
 
 include(FindPackageHandleStandardArgs)
 find_package_handle_standard_args(HDF5
