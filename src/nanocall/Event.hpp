@@ -73,7 +73,7 @@ struct Event_Sequence
         for (auto& e : *this)
         {
             e.corrected_mean -= drift * e.start;
-            e.update_logs();
+            e.log_corrected_mean = std::log(e.corrected_mean);
         }
     }
     std::string get_base_seq() const

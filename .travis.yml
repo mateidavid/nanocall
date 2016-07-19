@@ -1,0 +1,12 @@
+# travis.yml for github.com/mateidavid/nanocall
+
+dist: trusty
+sudo: required
+language: cpp
+
+before_install:
+    - sudo add-apt-repository -y ppa:ubuntu-toolchain-r/test
+    - sudo apt-get update -qq
+    - sudo apt-get install -qq build-essential cmake g++-4.9 libhdf5-dev
+
+script: mkdir build && cd build && CXX=g++-4.9 cmake ../src && make && sudo make install && nanocall --version

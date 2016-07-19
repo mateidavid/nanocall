@@ -2,6 +2,8 @@
 
 *** Nanocall: An Oxford Nanopore Basecaller
 
+[[http://travis-ci.org/mateidavid/nanocall][http://travis-ci.org/mateidavid/nanocall.svg]]
+
 **** Installation
 
 Nanocall can be built from source in a classical UNIX environment, or directly under [[https://www.docker.com/what-docker][Docker]]. The Docker build might run under Windows, though this is not tested.
@@ -66,5 +68,5 @@ docker run --rm -u $(id -u):$(id -g) -v /path/to/data:/data nanocall -t 4 . >out
 
 **** License
 
-Released under the [[LICENSE][MIT license]].
+Released under the [[file:LICENSE][MIT license]].
 
