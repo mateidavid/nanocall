@@ -14,7 +14,7 @@ RUN apt-get update && \
 #ENV CXX=g++-4.9
 
 # add source
-ADD ["VERSION", "/tmp"]
+ADD ["VERSION", "/tmp/VERSION"]
 ADD ["src", "/tmp/src"]
 
 # build and install
