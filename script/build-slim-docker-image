@@ -1,0 +1,36 @@
+#!/bin/bash
+set -eEu
+trap 'echo "$0: line $LINENO: exit code $?" >&2' ERR
+log () { echo "$@" >&2; }
+crash () { log "error: $@"; exit 1; }
+
+_prog_path=$(readlink -e "${BASH_SOURCE[0]}")
+_prog_name=$(basename "$_prog_path")
+_prog_dir=$(dirname "$_prog_path")
+_prog_args=()
+
+export TZ=$(cat /etc/timezone)
+export USER_ID=$(id -u)
+export USER_NAME=$(id -un)
+export GROUP_ID=$(id -g)
+export GROUP_NAME=$(id -gn)
+ROOT_DIR=$(cd "$_prog_dir"/..; pwd -P)
+
+# build default fat image
+docker build -t nanocall-build "$ROOT_DIR"
+
+# extract lddtree for nanocall
+mkdir -p "$ROOT_DIR/build-slim-image"
+docker run --rm -v "$ROOT_DIR":/data --entrypoint=/bin/bash nanocall-build -c 'apt-get install -y pax-utils >/dev/null 2>&1 && /data/script/get-lddtree /usr/local/bin/nanocall' >"$ROOT_DIR"/build-slim-image/lddtree.tgz
+
+# remove fat image
+#docker rmi nanocall-build
+
+# create slim Dockerfile
+envsubst <"$ROOT_DIR/Dockerfile.slim.in" >"$ROOT_DIR/build-slim-image/Dockerfile"
+
+# build slim image
+docker build -t nanocall "$ROOT_DIR/build-slim-image"
+
+# test it out
+docker run --rm nanocall

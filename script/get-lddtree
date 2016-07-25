@@ -9,8 +9,7 @@ _prog_name=$(basename "$_prog_path")
 _prog_dir=$(dirname "$_prog_path")
 _prog_args=()
 
-lddtree -a "$@" |
-awk '$2=="=>" {print $3}' |
+lddtree -a -l "$@" |
 sort |
 uniq |
 tar -chvzf - --files-from -

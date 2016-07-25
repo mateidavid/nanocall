@@ -12,7 +12,7 @@ RUN groupadd --gid ${GROUP_ID} ${GROUP_NAME}
 RUN useradd --create-home --uid ${USER_ID} --gid ${GROUP_ID} ${USER_NAME}
 USER ${USER_NAME}
 
-VOLUME /data
+VOLUME ["/data"]
 WORKDIR /data
 ENTRYPOINT ["/usr/local/bin/nanocall"]
 CMD ["--version"]

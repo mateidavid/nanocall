@@ -1,19 +1,30 @@
-FROM ubuntu:14.04
-MAINTAINER Matei David <matei@cs.toronto.edu>
+FROM debian:unstable
+MAINTAINER Matei David <matei.david.at.oicr.on.ca>
 
-RUN apt-get update && apt-get install -y build-essential cmake git libhdf5-dev
+# install prerequisites
+RUN apt-get update && \
+    apt-get install -y \
+        build-essential \
+        cmake \
+        libhdf5-dev
 
-RUN mkdir /src && \
-     cd /src && \
-     git clone --recursive --branch master --depth 1 https://github.com/mateidavid/nanocall.git
+# if necessary, specify compiler
+#RUN apt-get install -y g++-4.9 g++-5 g++-6
+#ENV CC=gcc-4.9
+#ENV CXX=g++-4.9
 
-RUN mkdir /src/nanocall/build && \
-    cd /src/nanocall/build && \
+# add source
+ADD ["VERSION", "/tmp"]
+ADD ["src", "/tmp/src"]
+
+# build and install
+RUN mkdir -p /tmp/build && \
+    cd /tmp/build && \
     cmake ../src && \
     make && \
     make install
 
-VOLUME /data
+VOLUME ["/data"]
 WORKDIR /data
 ENTRYPOINT ["/usr/local/bin/nanocall"]
 CMD ["--version"]

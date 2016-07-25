@@ -4,4 +4,4 @@ sudo: required
 
 services: docker
 
-install: ./run-docker-build
+install: script/build-slim-docker-image
