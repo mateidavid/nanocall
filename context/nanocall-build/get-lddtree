@@ -1,0 +1,16 @@
+#!/bin/bash
+set -eEu
+trap 'echo "$0: line $LINENO: exit code $?" >&2' ERR
+log () { echo "$@" >&2; }
+crash () { log "error: $@"; exit 1; }
+
+_prog_path=$(readlink -e "${BASH_SOURCE[0]}")
+_prog_name=$(basename "$_prog_path")
+_prog_dir=$(dirname "$_prog_path")
+_prog_args=()
+
+lddtree -a "$1" |
+awk '$2=="=>" {print $3}' |
+sort |
+uniq |
+tar -chvzf - --files-from -

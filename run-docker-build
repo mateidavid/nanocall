@@ -1,0 +1,23 @@
+#!/bin/bash
+set -eEu
+trap 'echo "$0: line $LINENO: exit code $?" >&2' ERR
+log () { echo "$@" >&2; }
+crash () { log "error: $@"; exit 1; }
+
+_prog_path=$(readlink -e "${BASH_SOURCE[0]}")
+_prog_name=$(basename "$_prog_path")
+_prog_dir=$(dirname "$_prog_path")
+_prog_args=()
+
+docker build -t nanocall-build $PWD/context/nanocall-build
+docker run --rm nanocall-build get-lddtree /usr/bin/local/nanocall >$PWD/context/nanocall/lddtree.tgz
+docker rmi nanocall-build
+
+export TZ=$(cat /etc/timezone)
+export USER_ID=$(id -u)
+export USER_NAME=$(id -un)
+export GROUP_ID=$(id -g)
+export GROUP_NAME=$(id -gn)
+envsubst <$PWD/context/nanocall/Dockerfile.in >$PWD/context/nanocall/Dockerfile
+docker build -t nanocall $PWD/context/nanocall
+docker run --rm nanocall
