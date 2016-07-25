@@ -2,8 +2,6 @@
 
 sudo: required
 
-services:
-    - docker
+services: docker
 
-install:
-    ./run-docker-build
+install: ./run-docker-build
