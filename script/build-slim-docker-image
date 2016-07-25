@@ -31,6 +31,3 @@ envsubst <"$ROOT_DIR/Dockerfile.slim.in" >"$ROOT_DIR/build-slim-image/Dockerfile
 
 # build slim image
 docker build -t nanocall "$ROOT_DIR/build-slim-image"
-
-# test it out
-docker run --rm nanocall
