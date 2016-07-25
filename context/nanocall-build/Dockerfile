@@ -24,4 +24,4 @@ RUN cd /tmp && \
     make && \
     make install
 
-ADD get-nanocall-lddtree /usr/local/bin
+ADD get-lddtree /usr/local/bin
