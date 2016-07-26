@@ -6,6 +6,6 @@ services: docker
 
 install: script/build-slim-docker-image
 
-pre_script: docker images --all --no-trunc
+before_script: docker images --all --no-trunc
 
 script: docker run --rm nanocall
