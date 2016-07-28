@@ -17,14 +17,14 @@ export GROUP_NAME=$(id -gn)
 ROOT_DIR=$(cd "$_prog_dir"/..; pwd -P)
 
 # build default fat image
-docker build -t nanocall-build "$ROOT_DIR"
+docker build -t nanocall:build "$ROOT_DIR"
 
 # extract lddtree for nanocall
 mkdir -p "$ROOT_DIR/build-slim-image"
-docker run --rm -v "$ROOT_DIR":/data --entrypoint=/bin/bash nanocall-build -c 'apt-get install -y pax-utils >/dev/null 2>&1 && /data/script/get-lddtree /usr/local/bin/nanocall' >"$ROOT_DIR"/build-slim-image/lddtree.tgz
+docker run --rm -v "$ROOT_DIR":/data --entrypoint=/bin/bash nanocall:build -c 'apt-get install -y pax-utils >/dev/null 2>&1 && /data/script/get-lddtree /usr/local/bin/nanocall' >"$ROOT_DIR"/build-slim-image/lddtree.tgz
 
 # remove fat image
-#docker rmi nanocall-build
+docker rmi nanocall:build
 
 # create slim Dockerfile
 envsubst <"$ROOT_DIR/Dockerfile.slim.in" >"$ROOT_DIR/build-slim-image/Dockerfile"
