@@ -89,6 +89,7 @@ version=$(
         echo "${name##*-}" &&
         log "got version from project root folder") ||
     (echo "unknown" && log "did not find version"))
+version=${version#v}
 log "found version=$version"
 
 if [ -r "$output_file" ]; then
