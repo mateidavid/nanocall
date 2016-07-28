@@ -1,5 +1,6 @@
 FROM debian:unstable
 MAINTAINER Matei David <matei.david.at.oicr.on.ca>
+ARG DEBIAN_FRONTEND=noninteractive
 
 ADD lddtree.tgz /
 

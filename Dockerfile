@@ -1,5 +1,6 @@
 FROM debian:unstable
 MAINTAINER Matei David <matei.david.at.oicr.on.ca>
+ARG DEBIAN_FRONTEND=noninteractive
 
 # install prerequisites
 RUN apt-get update && \
@@ -14,12 +15,11 @@ RUN apt-get update && \
 #ENV CXX=g++-4.9
 
 # add source
-ADD ["VERSION", "/tmp/VERSION"]
-ADD ["src", "/tmp/src"]
+ADD . /src/
 
 # build and install
-RUN mkdir -p /tmp/build && \
-    cd /tmp/build && \
+RUN mkdir -p /src/build && \
+    cd /src/build && \
     cmake ../src && \
     make && \
     make install

@@ -34,14 +34,35 @@ make install
 
 ***** Under Docker
 
-To avoid dealing with prerequisites, Nanocall can be conveniently built under Docker. Docker installation and configuration is outside of the scope of this document.
-Example build:
+To avoid dealing with prerequisites, Nanocall can be conveniently built under Docker. The installation and configuration of Docker itself is outside of the scope of this document.
+
+****** Simple "fat" build
+
+The simplest way to run Nanocall under Docker is:
 
 #+BEGIN_EXAMPLE
-mkdir /some/temp/dir && cd /some/temp/dir
-wget https://raw.githubusercontent.com/mateidavid/nanocall/master/Dockerfile
-docker build -t nanocall /some/temp/dir
-docker run --rm nanocall
+docker build -t nanocall https://github.com/mateidavid/nanocall.git
+docker run --rm nanocall --version
+docker run --rm -u $(id -u):$(id -g) -v /path/to/data:/data nanocall -t 4 . >output.fa
+#+END_EXAMPLE
+
+Howver, there are several problems with this build:
+
+- The docker image is "fat", in that it contains all the build time dependencies of Nanocall, which are not needed at run time.
+
+- Without using =-u=, the image will create files with a UID of 0 on the mounted volumes of the host. To remove them, you will have to use =sudo rm= or =sudo chown=.
+
+- The timezone inside the image might be different from the host. This might confuse programs which depend on comparing modification times, most notably =make=.
+
+****** Alternate "slim" build
+
+To alleviate the problems mentioned above, you can build a "slim" Docker image as follows:
+
+#+BEGIN_EXAMPLE
+git clone --recursive --depth 1 https://github.com/mateidavid/nanocall.git
+nanocall/script/build-slim-docker-image
+docker run --rm nanocall --version
+docker run --rm -v /path/to/data:/data nanocall -t 4 . >output.fa
 #+END_EXAMPLE
 
 **** Usage Examples
@@ -63,6 +84,7 @@ nanocall -t 24 /path/to/data >output.fa 2>/dev/null
 nanocall /path/to/files.fofn >output.fa
 
 # Run Docker build on directory, using 4 threads
+# Note: -u is not needed with the "slim" build
 docker run --rm -u $(id -u):$(id -g) -v /path/to/data:/data nanocall -t 4 . >output.fa
 #+END_EXAMPLE
 
