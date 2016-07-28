@@ -350,7 +350,7 @@ public:
             // open file
             fast5::File f(file_name, true); // can throw
             // write seq
-            f.add_basecall_seq(bc_grp, st, name, seq, default_qual);
+            f.add_basecall_seq(st, bc_grp, name, seq, default_qual);
         }
         catch (hdf5_tools::Exception& e)
         {
@@ -365,7 +365,7 @@ public:
             // open file
             fast5::File f(file_name, true); // can throw
             // write seq
-            f.add_basecall_events(bc_grp, st, ev);
+            f.add_basecall_events(st, bc_grp, ev);
         }
         catch (hdf5_tools::Exception& e)
         {
@@ -380,7 +380,7 @@ public:
             // open file
             fast5::File f(file_name, true); // can throw
             // write model params
-            f.add_basecall_model(bc_grp, st, model.get_state_vector());
+            f.add_basecall_model(st, bc_grp, model.get_state_vector());
         }
         catch (hdf5_tools::Exception& e)
         {
@@ -395,7 +395,7 @@ public:
             // open file
             fast5::File f(file_name, true); // can throw
             // write model params
-            f.add_basecall_model_params(bc_grp, st, params);
+            f.add_basecall_model_params(st, bc_grp, params);
         }
         catch (hdf5_tools::Exception& e)
         {
