@@ -116,33 +116,28 @@ public:
             {
                 // open file
                 f.open(file_name); // can throw
+                // get sampling rate
                 if (not f.have_sampling_rate())
                 {
                     LOG("Fast5_Summary", info) << file_name << ": missing sampling rate" << std::endl;
                     break;
                 }
-                // get sampling rate
                 sampling_rate = f.get_sampling_rate(); // can throw
                 if (sampling_rate < 1000.0 or sampling_rate > 10000.0)
                 {
                     LOG("Fast5_Summary", warning) << file_name << ": unexpected sampling rate: " << sampling_rate << std::endl;
                     break;
                 }
-                // get ed event params
-                auto ed_params = (not eventdetection_group().empty()
-                                  ? f.get_eventdetection_event_params(eventdetection_group())
-                                  : f.get_eventdetection_event_params()); // can throw
+                // get ed event params and ed events
+                if (not f.have_eventdetection_events(eventdetection_group()))
+                {
+                    LOG("Fast5_Summary", info) << file_name << ": missing eventdetection events" << std::endl;
+                    break;
+                }
+                auto ed_params = f.get_eventdetection_event_params(eventdetection_group()); // can throw
                 if (not ed_params.read_id.empty())
                 {
                     read_id = ed_params.read_id;
-                }
-                // get ed events
-                if (not eventdetection_group().empty()
-                    ? not f.have_eventdetection_events(eventdetection_group())
-                    : not f.have_eventdetection_events())
-                {
-                    LOG("Fast5_Summary", info) << file_name << ": no eventdetection events" << std::endl;
-                    break;
                 }
                 load_ed_events(&f);
                 num_ed_events = ed_events().size();
@@ -473,9 +468,7 @@ private:
     {
         ed_events_ptr = decltype(ed_events_ptr)(
             new typename decltype(ed_events_ptr)::element_type(
-                not eventdetection_group().empty()
-                ? f_p->get_eventdetection_events(eventdetection_group())
-                : f_p->get_eventdetection_events()));
+                f_p->get_eventdetection_events(eventdetection_group())));
     }
 
     // crude detection of abasic level
