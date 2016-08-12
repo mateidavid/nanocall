@@ -70,9 +70,10 @@ namespace opts
     SwitchArg double_strand_scaling("", "double-strand-scaling", "Train scaling parameters per read. (default)", cmd_parser);
     SwitchArg no_train_transitions("", "no-train-transitions", "Do not train state transitions.", cmd_parser);
     SwitchArg no_train_scaling("", "no-train-scaling", "Do not train pore model scaling.", cmd_parser);
-    SwitchArg only_train("", "only-train", "Stop after training.", cmd_parser);
     SwitchArg train("", "train", "Enable training. (default)", cmd_parser);
     SwitchArg no_train("", "no-train", "Disable all training.", cmd_parser);
+    SwitchArg basecall("", "basecall", "Enable basecalling (default).", cmd_parser);
+    SwitchArg no_basecall("", "no-basecall", "Disable basecalling.", cmd_parser);
     //
     ValueArg< float > pr_skip("", "pr-skip", "Transition probability of skipping at least 1 state.", false, .3, "float", cmd_parser);
     ValueArg< float > pr_stay("", "pr-stay", "Transition probability of staying in the same state.", false, .1, "float", cmd_parser);
@@ -874,10 +875,10 @@ int real_main()
     init_reads(models, files, reads);
     if (opts::train)
     {
-        // do some rescaling
+        // do some training
         train_reads(models, default_transitions, reads);
     }
-    if (not opts::only_train)
+    if (opts::basecall)
     {
         // basecall reads
         basecall_reads(models, default_transitions, reads);
@@ -918,6 +919,38 @@ int main(int argc, char * argv[])
     Fast5_Summary_Type::min_ed_events() = opts::min_ed_events;
     Fast5_Summary_Type::max_ed_events() = opts::max_ed_events;
     Fast5_Summary_Type::eventdetection_group() = opts::ed_group;
+    LOG (info) << "eventdetection_group=" << (Fast5_Summary_Type::eventdetection_group().empty()
+                                              ? string("smallest")
+                                              : Fast5_Summary_Type::eventdetection_group()) << endl;
+    //
+    // set pore-related options
+    //
+    if (opts::pore.get() == "r9")
+    {
+        Fast5_Summary_Type::abasic_level_top_percent() = 1.0;
+        Fast5_Summary_Type::abasic_level_top_offset() = 0.0;
+        Fast5_Summary_Type::hairpin_island_window_size() = 10;
+        Fast5_Summary_Type::hairpin_island_window_load() = 5;
+    }
+    else if (opts::pore.get() == "r73")
+    {
+        Fast5_Summary_Type::abasic_level_top_percent() = 1.0;
+        Fast5_Summary_Type::abasic_level_top_offset() = 5.0;
+        Fast5_Summary_Type::hairpin_island_window_size() = 5;
+        Fast5_Summary_Type::hairpin_island_window_load() = 5;
+    }
+    else
+    {
+        LOG(error) << "unknown pore type: " << opts::pore.get() << endl;
+        return EXIT_FAILURE;
+    }
+    LOG(info)
+        << "hairpin_detection:"
+        << " abasic_level_top_percent=" << Fast5_Summary_Type::abasic_level_top_percent()
+        << " abasic_level_top_offset=" << Fast5_Summary_Type::abasic_level_top_offset()
+        << " hairpin_island_window_size=" << Fast5_Summary_Type::hairpin_island_window_size()
+        << " hairpin_island_window_load=" << Fast5_Summary_Type::hairpin_island_window_load()
+        << endl;
     //
     // set training option
     //
@@ -933,6 +966,21 @@ int main(int argc, char * argv[])
         opts::train.set(true);
     }
     ASSERT(opts::train != opts::no_train);
+    //
+    // set basecalling option
+    //
+    if (opts::basecall and opts::no_basecall)
+    {
+        LOG(error)
+            << "either --basecall or --no-basecall may be used, but not both" << endl;
+        return EXIT_FAILURE;
+    }
+    else if (not opts::basecall and not opts::no_basecall)
+    {
+        // by default, enable basecalling
+        opts::basecall.set(true);
+    }
+    ASSERT(opts::basecall != opts::no_basecall);
     //
     // set single/double strand scaling option
     //
@@ -977,7 +1025,6 @@ int main(int argc, char * argv[])
     LOG(info) << "train=" << opts::train.get() << endl;
     if (opts::train)
     {
-        LOG(info) << "only_train=" << opts::only_train.get() << endl;
         LOG(info) << "train_scaling=" << not opts::no_train_scaling.get() << endl;
         LOG(info) << "train_transitions=" << not opts::no_train_transitions.get() << endl;
         if (not opts::no_train_scaling)
@@ -989,5 +1036,6 @@ int main(int argc, char * argv[])
             LOG(info) << "scaling_select_threshold=" << opts::scaling_select_threshold.get() << endl;
         }
     }
+    LOG(info) << "basecall=" << opts::basecall.get() << endl;
     return real_main();
 }

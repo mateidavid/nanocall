@@ -89,6 +89,34 @@ public:
         return _eventdetection_group;
     }
 
+    // percent of top events to ignore
+    static double& abasic_level_top_percent()
+    {
+        static double _abasic_level_top_percent = 1.0;
+        return _abasic_level_top_percent;
+    }
+
+    // what to add to top level
+    static double& abasic_level_top_offset()
+    {
+        static double _abasic_level_top_offset = 0.0;
+        return _abasic_level_top_offset;
+    }
+
+    // window size to consider for hairpin detection
+    static unsigned& hairpin_island_window_size()
+    {
+        static unsigned _hairpin_island_window_size = 10;
+        return _hairpin_island_window_size;
+    }
+
+    // window load to consider for hairpin detection
+    static unsigned& hairpin_island_window_load()
+    {
+        static unsigned _hairpin_island_window_load = 5;
+        return _hairpin_island_window_load;
+    }
+
     Fast5_Summary() : valid(false) {}
     Fast5_Summary(const std::string fn, const Pore_Model_Dict_Type& models, bool sst)
         : valid(false) { summarize(fn, models, sst); }
@@ -479,7 +507,8 @@ private:
             return 0.0;
         }
         //
-        // use 1.0 pA + max level excluding to 5%
+        // exclude top abasic_level_top_percent() levels
+        // add abasic_level_top_offset()
         //
         std::vector< Float_Type > s;
         s.resize(ed_events().size());
@@ -489,36 +518,115 @@ private:
             s[i] = ed_events()[i].mean;
         }
         std::sort(s.begin(), s.end());
-        return s[99 * s.size() / 100] + 5.0f;
+        return s[(double)s.size() * (1.0 - abasic_level_top_percent() / 100.0)] + abasic_level_top_offset();
     } // detect_abasic_level()
 
-    // crude detection of abasic level
-    Float_Type detect_abasic_level_2()
+    std::vector< std::pair< unsigned, unsigned > > find_islands_5_consec() const
     {
-        if (ed_events().size() < min_ed_events())
-        {
-            return 0.0;
-        }
         //
-        // look for a peak level greater than the median,
-        // such that the next peak below it is more than 1pA lower
+        // find islands of >= 5 consecutive events at high level
         //
-        std::vector< Float_Type > s;
-        s.resize(ed_events().size());
-        unsigned i;
-        for (i = 0; i < ed_events().size(); ++i)
+        std::vector< std::pair< unsigned, unsigned > > islands;
+        unsigned i = 0;
+        while (i < ed_events().size())
         {
-            s[i] = ed_events()[i].mean;
+            if (ed_events()[i].mean >= abasic_level)
+            {
+                unsigned j = i + 1;
+                while (j < ed_events().size() and ed_events()[j].mean >= abasic_level) ++j;
+                if (j - i >= 5)
+               {
+                    islands.push_back(std::make_pair(i, j));
+                    LOG("Fast5_Summary", debug) << "abasic_island [" << i << "," << j << "]" << std::endl;
+                }
+                i = j + 1;
+            }
+            else
+            {
+                ++i;
+            }
         }
-        std::sort(s.begin(), s.end());
-        i = s.size() / 2;
-        while (i < s.size() and s[i - 1] > s[i] - 1.0) ++i;
-        if (i >= s.size())
+        return islands;
+    }
+
+    std::vector< std::pair< unsigned, unsigned > > find_islands_5_of_10_consec() const
+    {
+        //
+        // find islands of >= 5/10 consecutive events at high level
+        //
+        std::vector< std::pair< unsigned, unsigned > > islands;
+        unsigned i = 0;
+        unsigned window_start = 0;
+        unsigned window_count = 0;
+        while (i < ed_events().size())
         {
-            return 0.0;
+            if (ed_events()[i].mean >= abasic_level)
+            {
+                while (window_start + 10 <= i)
+                {
+                    if (ed_events()[window_start].mean >= abasic_level)
+                    {
+                        --window_count;
+                    }
+                    ++window_start;
+                }
+                while (window_start < i and ed_events()[window_start].mean < abasic_level)
+                {
+                    ++window_start;
+                }
+                assert(i < window_start + 10);
+                ++window_count;
+                if (window_count >= 5)
+                {
+                    islands.push_back(std::make_pair(window_start, i));
+                    LOG("Fast5_Summary", debug) << "abasic_island [" << window_start << "," << i << "]" << std::endl;
+                    window_start = i + 1;
+                    window_count = 0;
+                }
+            }
+            ++i;
         }
-        return s[i];
-    } // detect_abasic_level_2()
+        return islands;
+    }
+
+    // crude detection of hairpin islands
+    // look for >= hairping_window_load/hairpin_window_size consecutive events at high level
+    std::vector< std::pair< unsigned, unsigned > > find_hairpin_islands() const
+    {
+        std::vector< std::pair< unsigned, unsigned > > islands;
+        unsigned i = 0;
+        unsigned window_start = 0;
+        unsigned window_count = 0;
+        while (i < ed_events().size())
+        {
+            if (ed_events()[i].mean >= abasic_level)
+            {
+                while (window_start + hairpin_island_window_size() <= i)
+                {
+                    if (ed_events()[window_start].mean >= abasic_level)
+                    {
+                        --window_count;
+                    }
+                    ++window_start;
+                }
+                while (window_start < i and ed_events()[window_start].mean < abasic_level)
+                {
+                    ++window_start;
+                }
+                assert(i < window_start + hairpin_island_window_size());
+                ++window_count;
+                if (window_count >= hairpin_island_window_load())
+                {
+                    islands.push_back(std::make_pair(window_start, i));
+                    LOG("Fast5_Summary", debug) << "abasic_island [" << window_start << "," << i << "]" << std::endl;
+                    window_start = i + 1;
+                    window_count = 0;
+                }
+            }
+            ++i;
+        }
+        return islands;
+    } // find_hairpin_islands()
 
     // crude detection of strands in event sequence
     void detect_strands()
@@ -532,32 +640,13 @@ private:
             << "num_events=" << ed_events().size()
             << " abasic_level=" << abasic_level << std::endl;
         //
-        // find islands of >= 5 consecutive events at high level
+        // find islands of consecutive events at high level
         //
-        std::vector< std::pair< unsigned, unsigned > > islands;
-        unsigned i = 0;
-        while (i < ed_events().size())
-        {
-            if (ed_events()[i].mean >= abasic_level)
-            {
-                unsigned j = i + 1;
-                while (j < ed_events().size() and ed_events()[j].mean >= abasic_level) ++j;
-                if (j - i >= 5)
-                {
-                    islands.push_back(std::make_pair(i, j));
-                    LOG("Fast5_Summary", debug) << "abasic_island [" << i << "," << j << "]" << std::endl;
-                }
-                i = j + 1;
-            }
-            else
-            {
-                ++i;
-            }
-        }
+        auto islands = find_islands_5_consec(); //find_hairpin_islands();
         //
         // merge islands within 50bp of each other
         //
-        for (i = 1; i < islands.size(); ++i)
+        for (unsigned i = 1; i < islands.size(); ++i)
         {
             if (islands[i - 1].second + 50 >= islands[i].first)
             {
