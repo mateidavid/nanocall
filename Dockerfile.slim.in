@@ -1,4 +1,4 @@
-FROM debian:unstable
+FROM debian:stable
 MAINTAINER Matei David <matei.david.at.oicr.on.ca>
 ARG DEBIAN_FRONTEND=noninteractive
 
