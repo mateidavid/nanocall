@@ -2,7 +2,7 @@
 
 *** Nanocall: An Oxford Nanopore Basecaller
 
-[[http://travis-ci.org/mateidavid/nanocall][http://travis-ci.org/mateidavid/nanocall.svg?branch=master]]
+[[http://travis-ci.org/mateidavid/nanocall][http://travis-ci.org/mateidavid/nanocall.svg?branch=master]] [[https://tldrlegal.com/license/mit-license][http://img.shields.io/:license-mit-blue.svg]]
 
 **** Installation
 
