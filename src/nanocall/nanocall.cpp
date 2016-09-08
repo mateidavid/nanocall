@@ -66,6 +66,7 @@ namespace opts
     ValueArg< unsigned > scaling_max_rounds("", "scaling-max-rounds", "Maximum scaling rounds.", false, 10, "int", cmd_parser);
     ValueArg< unsigned > scaling_num_events("", "scaling-num-events", "Number of events used for model scaling.", false, 200, "int", cmd_parser);
     //
+    SwitchArg template_only("", "1d", "Interpret entire read as 1D template only.", cmd_parser);
     SwitchArg single_strand_scaling("", "single-strand-scaling", "Train scaling parameters per strand.", cmd_parser);
     SwitchArg double_strand_scaling("", "double-strand-scaling", "Train scaling parameters per read. (default)", cmd_parser);
     SwitchArg no_train_transitions("", "no-train-transitions", "Do not train state transitions.", cmd_parser);
@@ -919,6 +920,7 @@ int main(int argc, char * argv[])
     Fast5_Summary_Type::min_ed_events() = opts::min_ed_events;
     Fast5_Summary_Type::max_ed_events() = opts::max_ed_events;
     Fast5_Summary_Type::eventdetection_group() = opts::ed_group;
+    Fast5_Summary_Type::template_only() = opts::template_only;
     LOG (info) << "eventdetection_group=" << (Fast5_Summary_Type::eventdetection_group().empty()
                                               ? string("smallest")
                                               : Fast5_Summary_Type::eventdetection_group()) << endl;
@@ -944,13 +946,21 @@ int main(int argc, char * argv[])
         LOG(error) << "unknown pore type: " << opts::pore.get() << endl;
         return EXIT_FAILURE;
     }
-    LOG(info)
-        << "hairpin_detection:"
-        << " abasic_level_top_percent=" << Fast5_Summary_Type::abasic_level_top_percent()
-        << " abasic_level_top_offset=" << Fast5_Summary_Type::abasic_level_top_offset()
-        << " hairpin_island_window_size=" << Fast5_Summary_Type::hairpin_island_window_size()
-        << " hairpin_island_window_load=" << Fast5_Summary_Type::hairpin_island_window_load()
-        << endl;
+    if (not opts::template_only.get())
+    {
+        LOG(info)
+            << "hairpin_detection:"
+            << " abasic_level_top_percent=" << Fast5_Summary_Type::abasic_level_top_percent()
+            << " abasic_level_top_offset=" << Fast5_Summary_Type::abasic_level_top_offset()
+            << " hairpin_island_window_size=" << Fast5_Summary_Type::hairpin_island_window_size()
+            << " hairpin_island_window_load=" << Fast5_Summary_Type::hairpin_island_window_load()
+            << endl;
+    }
+    else
+    {
+        LOG(info)
+            << "hairpin_detection: disabled" << endl;
+    }
     //
     // set training option
     //

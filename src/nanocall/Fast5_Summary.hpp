@@ -117,6 +117,12 @@ public:
         return _hairpin_island_window_load;
     }
 
+    static unsigned& template_only()
+    {
+        static unsigned _template_only = 0;
+        return _template_only;
+    }
+
     Fast5_Summary() : valid(false) {}
     Fast5_Summary(const std::string fn, const Pore_Model_Dict_Type& models, bool sst)
         : valid(false) { summarize(fn, models, sst); }
@@ -631,11 +637,9 @@ private:
     // crude detection of strands in event sequence
     void detect_strands()
     {
-        if (ed_events().size() < 100u)
-        {
-            return;
-        }
+        if (ed_events().size() < 100u) return;
         strand_bounds = { { 50, static_cast< unsigned >(ed_events().size() - 50), 0, 0 } };
+        if (template_only()) return;
         LOG("Fast5_Summary", debug)
             << "num_events=" << ed_events().size()
             << " abasic_level=" << abasic_level << std::endl;
