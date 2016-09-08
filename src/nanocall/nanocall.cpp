@@ -57,6 +57,10 @@ namespace opts
     ValueArg< unsigned > chunk_size("", "chunk-size", "Thread chunk size.", false, 1, "int", cmd_parser);
     MultiArg< string > log_level("", "log", "Log level. (default: info)", false, "string", cmd_parser);
     ValueArg< string > stats_fn("", "stats", "Stats.", false, "", "file", cmd_parser);
+    ValueArg< unsigned > trim_ed_hp_end("", "trim-ed-hp-end", "Number of events to trim after hairpin end.", false, 50, "int", cmd_parser);
+    ValueArg< unsigned > trim_ed_hp_start("", "trim-ed-hp-start", "Number of events to trim before hairpin start.", false, 50, "int", cmd_parser);
+    ValueArg< unsigned > trim_ed_sq_end("", "trim-ed-sq-end", "Number of events to trim before sequence end.", false, 50, "int", cmd_parser);
+    ValueArg< unsigned > trim_ed_sq_start("", "trim-ed-sq-start", "Number of events to trim after sequence start.", false, 50, "int", cmd_parser);
     ValueArg< unsigned > max_ed_events("", "max-ed-events", "Maximum EventDetection events.", false, 100000, "int", cmd_parser);
     ValueArg< unsigned > min_ed_events("", "min-ed-events", "Minimum EventDetection events.", false, 10, "int", cmd_parser);
     ValueArg< unsigned > fasta_line_width("", "fasta-line-width", "Maximum fasta line width.", false, 80, "int", cmd_parser);
@@ -921,6 +925,7 @@ int main(int argc, char * argv[])
     Fast5_Summary_Type::max_ed_events() = opts::max_ed_events;
     Fast5_Summary_Type::eventdetection_group() = opts::ed_group;
     Fast5_Summary_Type::template_only() = opts::template_only;
+    Fast5_Summary_Type::trim_margins() = {{ opts::trim_ed_sq_start, opts::trim_ed_sq_end, opts::trim_ed_hp_start, opts::trim_ed_hp_end }};
     LOG (info) << "eventdetection_group=" << (Fast5_Summary_Type::eventdetection_group().empty()
                                               ? string("smallest")
                                               : Fast5_Summary_Type::eventdetection_group()) << endl;
@@ -946,6 +951,12 @@ int main(int argc, char * argv[])
         LOG(error) << "unknown pore type: " << opts::pore.get() << endl;
         return EXIT_FAILURE;
     }
+    LOG(info)
+        << "ed_event_trimming: "
+        << " sq_start=" << Fast5_Summary_Type::trim_margins()[0]
+        << " sq_end=" << Fast5_Summary_Type::trim_margins()[1]
+        << " hp_start=" << Fast5_Summary_Type::trim_margins()[2]
+        << " hp_end=" << Fast5_Summary_Type::trim_margins()[3] << endl;
     if (not opts::template_only.get())
     {
         LOG(info)

@@ -73,7 +73,7 @@ public:
 
     static unsigned& min_ed_events()
     {
-        static unsigned _min_ed_events = 1000;
+        static unsigned _min_ed_events = 10;
         return _min_ed_events;
     }
 
@@ -117,10 +117,18 @@ public:
         return _hairpin_island_window_load;
     }
 
+    // if set, do not split strands
     static unsigned& template_only()
     {
         static unsigned _template_only = 0;
         return _template_only;
+    }
+
+    // trim margins: after start, before end, before hairpin start, after hairpin end
+    static std::array< unsigned, 4 >& trim_margins()
+    {
+        static std::array< unsigned, 4 > _trim_margins = {{ 50u, 50u, 50u, 50u }};
+        return _trim_margins;
     }
 
     Fast5_Summary() : valid(false) {}
@@ -173,17 +181,11 @@ public:
                 {
                     read_id = ed_params.read_id;
                 }
-                load_ed_events(&f);
-                num_ed_events = ed_events().size();
-                if (num_ed_events < 100 + min_ed_events())
+                load_ed_events(&f); // also sets num_ed_events
+                if (num_ed_events < trim_margins()[0] + trim_margins()[1] + min_ed_events())
                 {
-                    LOG("Fast5_Summary", info) << file_name << ": not enough eventdetection events: " << num_ed_events << std::endl;
-                    num_ed_events = 0;
-                    break;
-                }
-                if (num_ed_events > max_ed_events())
-                {
-                    LOG("Fast5_Summary", info) << file_name << ": too many eventdetection events: " << num_ed_events << std::endl;
+                    LOG("Fast5_Summary", info)
+                        << file_name << ": not enough eventdetection events: " << num_ed_events << std::endl;
                     num_ed_events = 0;
                     break;
                 }
@@ -191,12 +193,14 @@ public:
                 abasic_level = detect_abasic_level();
                 if (abasic_level <= 1.0)
                 {
-                    LOG("Fast5_Summary", info) << file_name << ": abasic level too low: " << abasic_level << std::endl;
+                    LOG("Fast5_Summary", info)
+                        << file_name << ": abasic level too low: " << abasic_level << std::endl;
                     num_ed_events = 0;
                     break;
                 }
                 // detect strands
-                detect_strands();
+                strand_bounds = {{ trim_margins()[0], num_ed_events - trim_margins()[1], 0, 0 }};
+                if (not template_only()) detect_strands();
                 if (strand_bounds[1] <= strand_bounds[0])
                 {
                     LOG("Fast5_Summary", info) << file_name << ": no template strand detected" << std::endl;
@@ -503,15 +507,26 @@ private:
         ed_events_ptr = decltype(ed_events_ptr)(
             new typename decltype(ed_events_ptr)::element_type(
                 f_p->get_eventdetection_events(eventdetection_group())));
+        if (num_ed_events == 0)
+        {
+            if (ed_events().size() > max_ed_events())
+            {
+                LOG("Fast5_Summary", info)
+                    << file_name << ": using only " << max_ed_events()
+                    << " of " << ed_events().size() << " events" << std::endl;
+                num_ed_events = max_ed_events();
+            }
+            else
+            {
+                num_ed_events = ed_events().size();
+            }
+        }
+        ed_events().resize(num_ed_events);
     }
 
     // crude detection of abasic level
     Float_Type detect_abasic_level()
     {
-        if (ed_events().size() < min_ed_events())
-        {
-            return 0.0;
-        }
         //
         // exclude top abasic_level_top_percent() levels
         // add abasic_level_top_offset()
@@ -637,9 +652,6 @@ private:
     // crude detection of strands in event sequence
     void detect_strands()
     {
-        if (ed_events().size() < 100u) return;
-        strand_bounds = { { 50, static_cast< unsigned >(ed_events().size() - 50), 0, 0 } };
-        if (template_only()) return;
         LOG("Fast5_Summary", debug)
             << "num_events=" << ed_events().size()
             << " abasic_level=" << abasic_level << std::endl;
@@ -652,7 +664,7 @@ private:
         //
         for (unsigned i = 1; i < islands.size(); ++i)
         {
-            if (islands[i - 1].second + 50 >= islands[i].first)
+            if (islands[i - 1].second + std::max(trim_margins()[2], trim_margins()[3]) >= islands[i].first)
             {
                 LOG("Fast5_Summary", debug) << "merge_islands "
                           << "[" << islands[i - 1].first << "," << islands[i - 1].second << "] with "
@@ -703,15 +715,15 @@ private:
         {
             LOG("Fast5_Summary", debug)
                 << "hairpin_island [" << it->first << "," << it->second << "]" << std::endl;
-            strand_bounds[0] = 50;
-            if (islands[0].first < 100)
+            strand_bounds[0] = trim_margins()[0];
+            if (islands[0].first < trim_margins()[0] + trim_margins()[2])
             {
                 strand_bounds[0] = std::max(strand_bounds[0], islands[0].second);
             }
-            strand_bounds[1] = it->first - 50;
-            strand_bounds[2] = it->first + 50;
-            strand_bounds[3] = ed_events().size() - 50;
-            if (islands[islands.size() - 1].second > ed_events().size() - 100)
+            strand_bounds[1] = it->first - trim_margins()[2];
+            strand_bounds[2] = it->first + trim_margins()[3];
+            strand_bounds[3] = ed_events().size() - trim_margins()[1];
+            if (islands[islands.size() - 1].second > ed_events().size() - (trim_margins()[3] + trim_margins()[1]))
             {
                 strand_bounds[3] = std::min(strand_bounds[3], islands[islands.size() - 1].first);
             }
