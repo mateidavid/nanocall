@@ -3,11 +3,17 @@ MAINTAINER Matei David <matei.david.at.oicr.on.ca>
 ARG DEBIAN_FRONTEND=noninteractive
 
 # install prerequisites
-RUN apt-get update && \
-    apt-get install -y \
-        build-essential \
-        cmake \
-        libhdf5-dev
+RUN for i in 1 2 3; do \
+        apt-get update \
+        && break; sleep 1; \
+    done && \
+    for i in 1 2 3; do \
+        apt-get install -y \
+             build-essential \
+             cmake \
+             libhdf5-dev \
+        && break; sleep 1; \
+    done
 
 # if necessary, specify compiler
 #RUN apt-get install -y g++-4.9 g++-5 g++-6
