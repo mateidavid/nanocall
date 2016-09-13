@@ -57,6 +57,7 @@ namespace opts
     ValueArg< unsigned > chunk_size("", "chunk-size", "Thread chunk size.", false, 1, "int", cmd_parser);
     MultiArg< string > log_level("", "log", "Log level. (default: info)", false, "string", cmd_parser);
     ValueArg< string > stats_fn("", "stats", "Stats.", false, "", "file", cmd_parser);
+    ValueArg< string > train_drift("", "train-drift", "Train drift parameter. (default: yes for R73, no for R9)", false, "", "0|1", cmd_parser);
     ValueArg< unsigned > trim_ed_hp_end("", "trim-ed-hp-end", "Number of events to trim after hairpin end.", false, 50, "int", cmd_parser);
     ValueArg< unsigned > trim_ed_hp_start("", "trim-ed-hp-start", "Number of events to trim before hairpin start.", false, 50, "int", cmd_parser);
     ValueArg< unsigned > trim_ed_sq_end("", "trim-ed-sq-end", "Number of events to trim before sequence end.", false, 50, "int", cmd_parser);
@@ -932,13 +933,23 @@ int main(int argc, char * argv[])
     //
     // set pore-related options
     //
+    if (not opts::train_drift.get().empty()
+        and opts::train_drift.get() != "0"
+        and opts::train_drift.get() != "1")
+    {
+        LOG(error) << "train-drift not understdood: " << opts::train_drift.get() << endl;
+        return EXIT_FAILURE;
+    }
     if (opts::pore.get() == "r9")
     {
         Fast5_Summary_Type::abasic_level_top_percent() = 1.0;
         Fast5_Summary_Type::abasic_level_top_offset() = 0.0;
         Fast5_Summary_Type::hairpin_island_window_size() = 10;
         Fast5_Summary_Type::hairpin_island_window_load() = 5;
-        Parameter_Trainer_Type::pm_train_drift() = false;
+        if (opts::train_drift.get().empty())
+        {
+            opts::train_drift.get() = "0";
+        }
     }
     else if (opts::pore.get() == "r73")
     {
@@ -946,13 +957,17 @@ int main(int argc, char * argv[])
         Fast5_Summary_Type::abasic_level_top_offset() = 5.0;
         Fast5_Summary_Type::hairpin_island_window_size() = 5;
         Fast5_Summary_Type::hairpin_island_window_load() = 5;
-        Parameter_Trainer_Type::pm_train_drift() = true;
+        if (opts::train_drift.get().empty())
+        {
+            opts::train_drift.get() = "1";
+        }
     }
     else
     {
         LOG(error) << "unknown pore type: " << opts::pore.get() << endl;
         return EXIT_FAILURE;
     }
+    Parameter_Trainer_Type::pm_train_drift() = opts::train_drift.get() == "1";
     LOG(info)
         << "ed_event_trimming: "
         << " sq_start=" << Fast5_Summary_Type::trim_margins()[0]
@@ -1057,6 +1072,7 @@ int main(int argc, char * argv[])
             LOG(info) << "scaling_max_rounds=" << opts::scaling_max_rounds.get() << endl;
             LOG(info) << "scaling_min_progress=" << opts::scaling_min_progress.get() << endl;
             LOG(info) << "scaling_select_threshold=" << opts::scaling_select_threshold.get() << endl;
+            LOG(info) << "train_drift=" << opts::train_drift.get() << endl;
         }
     }
     LOG(info) << "basecall=" << opts::basecall.get() << endl;
