@@ -938,6 +938,7 @@ int main(int argc, char * argv[])
         Fast5_Summary_Type::abasic_level_top_offset() = 0.0;
         Fast5_Summary_Type::hairpin_island_window_size() = 10;
         Fast5_Summary_Type::hairpin_island_window_load() = 5;
+        Parameter_Trainer_Type::pm_train_drift() = false;
     }
     else if (opts::pore.get() == "r73")
     {
@@ -945,6 +946,7 @@ int main(int argc, char * argv[])
         Fast5_Summary_Type::abasic_level_top_offset() = 5.0;
         Fast5_Summary_Type::hairpin_island_window_size() = 5;
         Fast5_Summary_Type::hairpin_island_window_load() = 5;
+        Parameter_Trainer_Type::pm_train_drift() = true;
     }
     else
     {

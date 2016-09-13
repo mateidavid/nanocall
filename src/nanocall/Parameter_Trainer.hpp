@@ -62,6 +62,12 @@ struct Parameter_Trainer
         return _st_train_kmers;
     }
 
+    static unsigned& pm_train_drift()
+    {
+        static unsigned _pm_train_drift = 1;
+        return _pm_train_drift;
+    }
+
     /**
      * Struct used for training rounds.
      * @event_seq_ptr_v Vector of pairs, first: an event sequence, second: strand from which it comes
@@ -290,13 +296,16 @@ struct Parameter_Trainer
                 } // for j
                 A[0][0] += s[0];
                 A[0][1] += s[1];
-                A[0][2] += s[0] * t_i;
                 A[1][1] += s[2];
-                A[1][2] += s[1] * t_i;
-                A[2][2] += s[0] * t_i * t_i;
                 B[0]    += s[0] * x_i;
                 B[1]    += s[1] * x_i;
-                B[2]    += s[0] * x_i * t_i;
+                if (pm_train_drift())
+                {
+                    A[0][2] += s[0] * t_i;
+                    A[1][2] += s[1] * t_i;
+                    A[2][2] += s[0] * t_i * t_i;
+                    B[2]    += s[0] * x_i * t_i;
+                }
                 D       += s[0] * x_i * x_i;
                 V_numer += l[2] * y_i;
                 V_denom += l[1];
@@ -306,6 +315,10 @@ struct Parameter_Trainer
         A[1][0] = A[0][1];
         A[2][0] = A[0][2];
         A[2][1] = A[1][2];
+        if (not pm_train_drift())
+        {
+            A[2][2] = 1.0;
+        }
         auto A_copy = A;
         auto B_copy = B;
         // compute scaling vector used for scaled partial pivoting
@@ -384,7 +397,7 @@ struct Parameter_Trainer
             double x = (A_copy[i][0] * a_hat
                         + A_copy[i][1] * b_hat
                         + A_copy[i][2] * c_hat);
-            ASSERT((x - B_copy[i])/std::max(x, B_copy[i]) < 1e-3);
+            ASSERT((x - B_copy[i])/std::max(x, B_copy[i]) < pm_train_drift()? 1e-3 : 1e-2);
         }
 #endif
         //
