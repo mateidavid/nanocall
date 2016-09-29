@@ -22,7 +22,7 @@ public:
     Float_Type log_mean;
     Float_Type log_corrected_mean;
     Float_Type log_stdv;
-    Float_Type log_start;
+    //Float_Type log_start;
     //
     Float_Type orig_mean;
     Float_Type p_model_state;
@@ -32,10 +32,16 @@ public:
     //
     void update_logs()
     {
+        assert(mean > 0);
         log_mean = std::log(mean);
+        assert(corrected_mean > 0);
         log_corrected_mean = std::log(corrected_mean);
+        if (stdv == 0.0)
+        {
+            stdv = 0.01;
+        }
         log_stdv = std::log(stdv);
-        log_start = std::log(start);
+        //log_start = std::log(start);
     }
     void set_model_state(const std::string& s)
     {
