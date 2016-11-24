@@ -12,7 +12,7 @@ For the official ONT basecaller, see [[https://metrichor.com/s/][Metrichor]].
 
 **** Usefulness of Nanocall on recent ONT sequencing data
 
-To understand the usefullness of Nanocall compared to Metrichor, some background is in order.
+To understand the usefulness of Nanocall compared to Metrichor, some background is in order.
 
 *Before summer 2016*: Before the summer of 2016, and the release of the R9 sequencing pore:
 
@@ -22,7 +22,7 @@ To understand the usefullness of Nanocall compared to Metrichor, some background
 
 This state of affairs prompted us to develop Nanocall as an open-source local basecaller alternative to Metrichor.
 
-*After summer 2016*: The summer 2016 has brougth along several significant developments from ONT:
+*After summer 2016*: The summer of 2016 has brought along several significant developments from ONT:
 
 - A new sequencing pore R9 was released: ([[https://nanoporetech.com/about-us/news/update-new-r9-nanopore-faster-more-accurate-sequencing-and-new-ten-minute-preparation][ONT Press Release, May 2016]]).
 - The Metrichor source code was opened (under a development license).
@@ -30,8 +30,8 @@ This state of affairs prompted us to develop Nanocall as an open-source local ba
 
 As a result, Nanocall's usefulness is now limited to:
 
-- a base for further deveopment, and
-- situations where, for various reasons, you do not have access to (or you are trying to avoid using) the official ONT basecaller.
+- a platform for developing new basecalling ideas, and
+- situations where, for various reasons, you do not have access to the official ONT basecaller(s).
 
 If you want to use Nanocall on R9 data, Nanocall does support it directly, but its accuracy is significantly lower than that of Metrichor (unlike the case of R7.3, where the two had similar accuracy). The reason for the discrepancy is that Metrichor on R9 uses a more elaborate RNN-based approach, compared to the simple HMM-based one in Nanocall.
 
@@ -39,7 +39,7 @@ If you want to use Nanocall on R9 data, Nanocall does support it directly, but i
 
 Most people are only used to dealing with DNA bases. However, to understand where Nanocall fits in, we observe that there are 3 levels of ONT sequencing data:
 
-- Raw samples. These are direct picoamp measurements, taken at preset intervals as the DNA molecule is threaded through the pore. This data is passed through the USB cable from the MinION to the controlling laptop running MinKNOW. These are stored in =fast5= files at paths such as =/Raw/Reads/Read_29/Signal=.
+- Raw samples. These are direct (picoamp) current measurements, taken at preset intervals as the DNA molecule is threaded through the pore. This data is passed through the USB cable from the MinION to the controlling laptop running MinKNOW. These are stored in =fast5= files at paths such as =/Raw/Reads/Read_29/Signal=.
 
 - Events. Each event is an aggregation of multiple consecutive raw samples, (ideally) corresponding to a certain DNA context found in the pore. The process of computing events from raw samples is referred to as /event detection/. These are stored in =fast5= files at paths such as =/Analyses/EventDetection_000/Reads/Read_29/Events=.
 
