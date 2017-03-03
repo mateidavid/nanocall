@@ -165,7 +165,11 @@ set(CMAKE_CXX_FLAGS_GPROFREL "-O3 -DNDEBUG -DDISABLE_ASSERTS -pg")
 
 # link flags
 #set(CMAKE_EXE_LINKER_FLAGS "-Wl,-rpath=$ENV{LD_RUN_PATH} -Wl,--as-needed")
-set(CMAKE_EXE_LINKER_FLAGS "-Wl,--as-needed")
+if(APPLE)
+	set(CMAKE_EXE_LINKER_FLAGS "-Wl")
+else()
+	set(CMAKE_EXE_LINKER_FLAGS "-Wl,--as-needed")
+endif()
 message(STATUS "CMAKE_EXE_LINKER_FLAGS='${CMAKE_EXE_LINKER_FLAGS}'")
 
 ### This target updates the package version
