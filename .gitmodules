@@ -1,9 +1,0 @@
-[submodule "src/fast5"]
-	path = src/fast5
-	url = https://github.com/mateidavid/fast5.git
-[submodule "src/tclap"]
-	path = src/tclap
-	url = https://github.com/mateidavid/tclap.git
-[submodule "src/hpptools"]
-	path = src/hpptools
-	url = https://github.com/mateidavid/hpptools.git
